@@ -23,12 +23,12 @@ load_size = 224
 layer = 9
 facet = 'key'
 bin = True
-thresh = 0.01
+thresh = 0.05
 model_type = 'dino_vits8'
 stride = 4
 
 # Deployment hyperparameters
-ERR_THRESHOLD = 10  # A generic error between the two sets of points
+ERR_THRESHOLD = 0.05  # A generic error between the two sets of points
 
 
 def add_depth(points, depth):
@@ -187,17 +187,17 @@ def deploy_dinobot(env, data):
         print("t", t)
 
         # transform the points to plot them
-        points1_cp = np.array(points1)
-        points1_cp = np.dot(points1_cp, R.T) + t
-        # plot points1 and points2 to see if they are aligned
-        plot_points(image2_pil, points1_cp, points2)
+        # points1_cp = np.array(points1)
+        # points1_cp = np.dot(points1_cp, R.T) + t
+        # # plot points1 and points2 to see if they are aligned
+        # plot_points(image2_pil, points1_cp, points2)
 
         # A function to convert pixel distance into meters based on calibration of camera.
         # t_meters = env.convert_pixels_to_meters(t)
-        print("t_meters", t, "R", R)
+        # print("t_meters", t, "R", R)
 
         # Move robot
-        env.move(t, R)
+        env.move_in_camera_frame(t, R)
 
     # Once error is small enough, replay demo.
     env.replay_demo(demo_vels)

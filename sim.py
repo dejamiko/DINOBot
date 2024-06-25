@@ -4,6 +4,7 @@ or for small independent experiments with the pybullet simulation environment.
 """
 
 import os
+import time
 
 import cv2
 import numpy as np
@@ -27,6 +28,8 @@ class ArmEnv:
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
+
+        self.verbosity = 1
 
     def _setup_simulation_basic(self):
         """
@@ -122,25 +125,63 @@ class ArmEnv:
     def move_to_target(self, target_position, target_orientation=None):
         """
         Move the arm to the target position.
-        :param target_position: the position of the target
-        :param target_orientation: the orientation of the target
+        :param target_position: the position of the target in the world frame
+        :param target_orientation: the orientation of the target in the world frame
         """
+        lower_limits = []
+        upper_limits = []
+        joint_ranges = []
+        rest_poses = []
+        for i in range(p.getNumJoints(self.objects["arm"])):
+            joint_info = p.getJointInfo(self.objects["arm"], i)
+            if joint_info[2] != p.JOINT_FIXED:
+                lower_limits.append(joint_info[8])
+                upper_limits.append(joint_info[9])
+                joint_ranges.append(upper_limits[-1] - lower_limits[-1])
+                rest_poses.append(joint_info[8] + joint_info[9] / 2)
+
         if target_orientation is not None:
             target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position,
-                                                                  target_orientation)
+                                                                  target_orientation, lowerLimits=lower_limits,
+                                                                  upperLimits=upper_limits, jointRanges=joint_ranges,
+                                                                  restPoses=rest_poses)
         else:
-            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position)
+            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position,
+                                                                  lowerLimits=lower_limits, upperLimits=upper_limits,
+                                                                  jointRanges=joint_ranges, restPoses=rest_poses)
 
-        # interpolate the joint positions over a number of steps
-        num_steps = 50
-        joint_positions_now = p.getJointStates(self.objects["arm"], range(9))
-        joint_positions_now = [joint_state[0] for joint_state in joint_positions_now]
-        joint_positions_over_time = np.linspace(joint_positions_now, target_joint_positions, num_steps)
-        for joint_positions in joint_positions_over_time:
-            p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
-                                        targetPositions=joint_positions)
+        # # interpolate the joint positions over a number of steps
+        # num_steps = 50
+        # joint_positions_now = p.getJointStates(self.objects["arm"], range(9))
+        # joint_positions_now = [joint_state[0] for joint_state in joint_positions_now]
+        # joint_positions_over_time = np.linspace(joint_positions_now, target_joint_positions, num_steps)
+        # for joint_positions in joint_positions_over_time:
+        #     p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
+        #                                 targetPositions=joint_positions)
+        #     p.stepSimulation()
+        #     self.take_picture()
+
+        p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
+                                    targetPositions=target_joint_positions)
+
+        error, steps = np.inf, 0
+        while error > 0.01 and steps < 100:
+            current_pos, current_rot = p.getLinkState(self.objects["arm"], 11)[:2]
+            error = np.linalg.norm(np.array(target_position) - np.array(current_pos)) + np.linalg.norm(
+                np.array(target_orientation) - np.array(current_rot))
+
+            # current_rot = np.array(p.getMatrixFromQuaternion(current_rot)).reshape(3, 3)
+
+            # p.removeAllUserDebugItems()
+            # # draw the eef x, y, z axes
+            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 0], [1, 0, 0], lineWidth=5)
+            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 1], [0, 1, 0], lineWidth=5)
+            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 2], [0, 0, 1], lineWidth=5)
+
+            # self.step_to_target(target_position, target_orientation)
             p.stepSimulation()
             self.take_picture()
+            steps += 1
 
     def step_to_target(self, target_position, target_orientation=None):
         """
@@ -154,9 +195,8 @@ class ArmEnv:
         else:
             target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position)
 
-        for i in range(len(target_joint_positions)):
-            p.setJointMotorControl2(self.objects["arm"], i, p.POSITION_CONTROL, target_joint_positions[i])
-
+        p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
+                                    targetPositions=target_joint_positions)
         p.stepSimulation()
         self.take_picture()
 
@@ -170,15 +210,15 @@ class ArmEnv:
     def is_target_reached(self, target_position, target_orientation=None):
         """
         Check if the end-effector is close to the target position.
+        :param target_orientation: The orientation of the target
         :param target_position: the position of the target
         :return: True if the end-effector is close to the target position, False otherwise
         """
         gripper_pos, gripper_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
         if target_orientation is None:
             target_orientation = gripper_orientation
-        if np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(target_orientation, gripper_orientation,
-                                                                                atol=0.05):
-            print(gripper_pos, target_position, gripper_orientation, target_orientation)
+        if len(target_orientation) != 4:
+            target_orientation = Rotation.from_matrix(target_orientation).as_quat()
         return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(target_orientation,
                                                                                     gripper_orientation, atol=0.05)
 
@@ -197,17 +237,30 @@ class ArmEnv:
         projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
         # find the camera position to be at the wrist of the robot
-        com_p, com_o = p.getLinkState(self.objects["arm"], 11)[:2]
-        com_p = np.array(com_p)
-        com_p[2] -= 0.05
-        rot_matrix = p.getMatrixFromQuaternion(com_o)
-        rot_matrix = np.array(rot_matrix).reshape(3, 3)
+        camera_position, rot_matrix = self.get_camera_position_and_orientation()
         init_camera_vector = (0, 0, 1)
         init_up_vector = (0, 1, 0)
         camera_vector = rot_matrix.dot(init_camera_vector)
         up_vector = rot_matrix.dot(init_up_vector)
-        view_matrix = p.computeViewMatrix(com_p, com_p + 0.1 * camera_vector, up_vector)
+        view_matrix = p.computeViewMatrix(camera_position, camera_position + 0.1 * camera_vector, up_vector)
+
+        # clear the previous camera axes
+        p.removeAllUserDebugItems()
+        # draw the camera x, y, z axes
+        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 0], [1, 0, 0], lineWidth=5)
+        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 1], [0, 1, 0], lineWidth=5)
+        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 2], [0, 0, 1], lineWidth=5)
+
         return width, height, projection_matrix, view_matrix, fov
+
+    def get_camera_position_and_orientation(self):
+        eef_position, eef_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
+        eef_orientation = np.array(p.getMatrixFromQuaternion(eef_orientation)).reshape(3, 3)
+        eef_to_camera_position, eef_to_camera_orientation = self.get_eef_to_camera_transform()
+        camera_position = np.array(eef_position) + np.dot(eef_orientation, eef_to_camera_position)
+        camera_orientation = np.dot(eef_orientation, eef_to_camera_orientation)
+
+        return camera_position, camera_orientation
 
     def take_picture_and_save(self, filename):
         """
@@ -241,28 +294,36 @@ class ArmEnv:
 
         return im_name, depth_buffer
 
-    def move(self, t_meters, R):
+    def move(self, t, R):
         """
         Inputs: t_meters: (x,y,z) translation in end-effector frame
                 R: (3x3) array - rotation matrix in end-effector frame
 
         Moves and rotates the robot according to the input translation and rotation.
         """
-        end_effector = p.getLinkState(self.objects["arm"], 11)
-        current_pos = end_effector[0]
-        current_rot = end_effector[1]
-        current_rot = p.getMatrixFromQuaternion(current_rot)
-        current_rot = np.array(current_rot).reshape(3, 3)
+        current_pos, current_rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        current_rot = np.array(p.getMatrixFromQuaternion(current_rot)).reshape(3, 3)
 
         # calculate the desired position and rotation in world frame
-        print("Current position:", current_pos)
-        desired_pos = current_pos + t_meters
-        print("Desired position:", desired_pos)
+        if self.verbosity > 0:
+            print("Current position:", current_pos, "Current rotation:", current_rot)
+        desired_pos = current_pos + np.dot(current_rot, t)
         desired_rot = np.dot(current_rot, R)
+        if self.verbosity > 0:
+            print("Desired position:", desired_pos, "Desired rotation:", desired_rot)
         desired_rot = Rotation.from_matrix(desired_rot).as_quat()
 
+        self.move_with_debug_dot(desired_pos, desired_rot)
+
+    def move_with_debug_dot(self, desired_pos, desired_rot):
+        # add a red point at the desired position
+        red_dot = p.createVisualShape(p.GEOM_SPHERE, radius=0.02, rgbaColor=[1, 0, 0, 1],
+                                      visualFramePosition=desired_pos)
+        red_dot_id = p.createMultiBody(baseVisualShapeIndex=red_dot, baseMass=0, baseInertialFramePosition=desired_pos)
+        p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
         # move the robot
         self.move_to_target(desired_pos, desired_rot)
+        p.removeBody(red_dot_id)
 
     def replay_demo(self, demo):
         """
@@ -270,7 +331,8 @@ class ArmEnv:
 
         Replays a demonstration by moving the end-effector according to the input velocities.
         """
-        print("Replaying demonstration", demo)
+        if self.verbosity > 0:
+            print("Replaying demonstration", demo)
         for velocities in demo:
             p.setJointMotorControlArray(self.objects["arm"], range(7), p.VELOCITY_CONTROL, targetVelocities=velocities)
             p.stepSimulation()
@@ -342,6 +404,75 @@ class ArmEnv:
         """
         self._setup_simulation_basic()
 
+    def project_to_3d(self, points, depth):
+        """
+        Inputs: points: list of [x,y] pixel coordinates,
+                depth (H,W,1) observations from camera.
+                intrinsics: intrinsics of the camera, used to
+                project pixels to 3D space.
+        Outputs: point_with_depth: list of [x,y,z] coordinates.
+
+        Projects the selected pixels to 3D space using intrinsics and
+        depth value. Based on your setup the implementation may vary,
+        but here you can find a simple example or the explicit formula:
+        https://www.open3d.org/docs/0.6.0/python_api/open3d.geometry.create_point_cloud_from_rgbd_image.html.
+        """
+        height, width, _, _, fov = self.get_camera_info()
+        fx = width / (2 * np.tan(np.radians(fov / 2)))
+        fy = height / (2 * np.tan(np.radians(fov / 2)))
+        cx = width / 2
+        cy = height / 2
+        projected_points = []
+        for u, v in points:
+            z = depth[u, v]
+            x = (u - cx) * z / fx
+            y = (v - cy) * z / fy
+            projected_points.append([x, y, z])
+        projected_points = np.array(projected_points)
+        return projected_points
+
+    @staticmethod
+    def get_eef_to_camera_transform():
+        """
+        Get the transformation matrix from camera frame to end-effector frame.
+        """
+        camera_to_eef_position = np.array([0, 0, 0.05])
+        camera_to_eef_orientation = np.array(
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, - np.pi / 2]))).reshape(3, 3)
+        return camera_to_eef_position, camera_to_eef_orientation
+
+    def move_in_camera_frame(self, t, R):
+        """
+        Move the robot in the camera frame.
+        :param t: The translation in the camera frame
+        :param R: The rotation in the camera frame
+        """
+        if self.verbosity > 0:
+            print("Moving in camera frame")
+        camera_position, camera_rotation = self.get_camera_position_and_orientation()
+        camera_to_eef_position, camera_to_eef_orientation = self.get_eef_to_camera_transform()
+        eef_position = camera_position - np.dot(camera_rotation, camera_to_eef_position)
+        eef_rotation = np.dot(camera_rotation, np.linalg.inv(camera_to_eef_orientation))
+        eef_position_actual, eef_orientation_actual = p.getLinkState(self.objects["arm"], 11)[:2]
+        assert np.allclose(eef_position, eef_position_actual), f"{eef_position} != {eef_position_actual}"
+        assert np.allclose(eef_rotation, np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)), \
+            f"{eef_rotation} != {np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)}"
+        new_camera_position = camera_position + np.dot(camera_rotation, t)
+        new_camera_rotation = np.dot(camera_rotation, R)
+
+        new_eef_position = new_camera_position - np.dot(new_camera_rotation, camera_to_eef_position)
+        new_eef_orientation = np.dot(new_camera_rotation, np.linalg.inv(camera_to_eef_orientation))
+
+        if self.verbosity > 0:
+            print("Old camera position:", camera_position, "Old camera orientation:", camera_rotation)
+            print("New camera position:", new_camera_position, "New camera orientation:", new_camera_rotation)
+            print("Old eef position:", eef_position, "Old eef orientation:", eef_rotation)
+            print("New eef position:", new_eef_position, "New eef orientation:", new_eef_orientation)
+
+        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat()
+
+        self.move_with_debug_dot(new_eef_position, new_eef_orientation)
+
 
 if __name__ == "__main__":
     """
@@ -353,10 +484,46 @@ if __name__ == "__main__":
     # pos = env.get_target_position("object")
     # env.move_to_target(pos)
 
-    env.move(np.array([0.5, 0, 0]), np.eye(3))
-    env.move(np.array([0, 0.5, 0]), np.eye(3))
-    env.move(np.array([-0.5, 0, 0]), np.eye(3))
-    env.move(np.array([0, -0.5, 0]), np.eye(3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, 0]))).reshape(3, 3))
+    # env.move_in_camera_frame(np.array([0, 0.3, 0]), np.eye(3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
+    #
+    # env.move_to_target(np.array([1, 1, 0.821]), np.eye(3))
+    #
+    # env.move(np.array([0.3, 0, 0]), np.eye(3))
+    # env.move(np.array([0, 0.3, 0]), np.eye(3))
+    # env.move(np.array([-0.3, 0, 0]), np.eye(3))
+    # env.move(np.array([0, -0.3, 0]), np.eye(3))
+    # env.move(np.array([0.3, 0, 0]), np.eye(3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
+    # env.move(np.array([-0.3, 0, 0]), np.eye(3))
+
+    # env.move(np.array([0.25, 0, 0]), np.eye(3))
+    # env.move(np.array([0, 0.25, 0]), np.eye(3))
+    # env.move(np.array([-0.25, 0, 0]), np.eye(3))
+    # env.move(np.array([0, -0.25, 0]), np.eye(3))
+    # env.move(np.array([0, 0, 0]),
+    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    # env.move(np.array([0, 0.25, 0]), np.eye(3))
+
+    # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
+    # env.move_in_camera_frame(np.array([0, 0.3, 0]), np.eye(3))
+    # env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
+    # env.move_in_camera_frame(np.array([0, -0.3, 0]), np.eye(3))
+    # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
+    # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
+    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
+    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
+    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
+    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
 
     # demo = env.record_demo()
     #
