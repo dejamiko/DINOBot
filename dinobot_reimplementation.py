@@ -8,45 +8,36 @@ import shutil
 import warnings
 
 import numpy as np
+import requests
 import torch
 import torchvision.transforms as T
 from PIL import Image
+from dino_vit_features.correspondences import draw_correspondences
 
-from dino_vit_features.correspondences import find_correspondences, draw_correspondences
 from sim import ArmEnv
 
 warnings.filterwarnings("ignore")
 
-# Hyperparameters for DINO correspondences extraction
-num_pairs = 8
 load_size = 224
-layer = 9
-facet = 'key'
-bin = True
-thresh = 0.05
-model_type = 'dino_vits8'
-stride = 4
-
+url = 'http://146.169.1.68:8000/infer'
 # Deployment hyperparameters
 ERR_THRESHOLD = 0.05  # A generic error between the two sets of points
 
 
-def add_depth(points, depth):
-    """
-    Inputs: points: list of [x,y] pixel coordinates, 
-            depth (H,W,1) observations from camera.
-    Outputs: point_with_depth: list of [x,y,z] coordinates.
-    
-    Adds the depth value/channel to the list of pixels by
-    extracting the corresponding depth value from depth.
-    """
-
-    points_with_depth = []
-    for point in points:
-        x, y = point
-        points_with_depth.append([x, y, depth[x, y]])
-
-    return points_with_depth
+def find_correspondences(image_path1, image_path2, url):
+    with open(image_path1, 'rb') as f:
+        files = {'image1': f.read()}
+    with open(image_path2, 'rb') as f:
+        files['image2'] = f.read()
+    response = requests.post(url, files=files)
+    if response.status_code == 200:
+        parsed_response = response.json()
+        image1_pil = Image.fromarray(np.array(parsed_response["image1_pil"], dtype='uint8'))
+        image2_pil = Image.fromarray(np.array(parsed_response["image2_pil"], dtype='uint8'))
+        return (parsed_response["points1"], parsed_response["points2"], image1_pil, image2_pil,
+                parsed_response["time_taken"])
+    else:
+        print(response.json())
 
 
 def find_transformation(X, Y):
@@ -55,7 +46,6 @@ def find_transformation(X, Y):
     Outputs: R - 3x3 rotation matrix, t - 3-dim translation array.
     Find transformation given two sets of correspondences between 3D points.
     """
-    print(len(X), len(Y))
     # Calculate centroids
     cX = np.mean(X, axis=0)
     cY = np.mean(Y, axis=0)
@@ -144,27 +134,15 @@ def deploy_dinobot(env, data):
         rgb_live, depth_live = env.take_picture_and_save("lv")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        with torch.no_grad():
-            points1, points2, image1_pil, image2_pil = find_correspondences(
-                rgb_live,
-                rgb_bn,
-                num_pairs,
-                load_size,
-                layer,
-                facet,
-                bin,
-                thresh,
-                model_type,
-                stride
-            )
+        points1, points2, image1_pil, image2_pil, time = find_correspondences(rgb_bn, rgb_live, url)
 
         # filter out points that are very close to each other (as they are likely to be the background)
         # points1, points2 = filter_points(points1, points2)
 
         # save the images
         fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
-        fig1.savefig(f'images/image1.png')
-        fig2.savefig(f'images/image2.png')
+        fig1.savefig(f'images/image1_correspondences.png')
+        fig2.savefig(f'images/image2_correspondences.png')
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
         # points1 = add_depth(points1, depth_bn)
@@ -243,6 +221,7 @@ if __name__ == "__main__":
     clear_images()
 
     env = ArmEnv(load_size)
+    env.verbosity = 0
     env.load_object()
 
     # this can be one demo or multiple demos

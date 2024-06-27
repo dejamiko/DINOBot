@@ -150,38 +150,24 @@ class ArmEnv:
                                                                   lowerLimits=lower_limits, upperLimits=upper_limits,
                                                                   jointRanges=joint_ranges, restPoses=rest_poses)
 
-        # # interpolate the joint positions over a number of steps
-        # num_steps = 50
-        # joint_positions_now = p.getJointStates(self.objects["arm"], range(9))
-        # joint_positions_now = [joint_state[0] for joint_state in joint_positions_now]
-        # joint_positions_over_time = np.linspace(joint_positions_now, target_joint_positions, num_steps)
-        # for joint_positions in joint_positions_over_time:
-        #     p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
-        #                                 targetPositions=joint_positions)
-        #     p.stepSimulation()
-        #     self.take_picture()
-
         p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
                                     targetPositions=target_joint_positions)
 
         error, steps = np.inf, 0
+        if self.verbosity > 0:
+            points_debug_3d = -1
         while error > 0.01 and steps < 100:
             current_pos, current_rot = p.getLinkState(self.objects["arm"], 11)[:2]
             error = np.linalg.norm(np.array(target_position) - np.array(current_pos)) + np.linalg.norm(
                 np.array(target_orientation) - np.array(current_rot))
 
-            # current_rot = np.array(p.getMatrixFromQuaternion(current_rot)).reshape(3, 3)
-
-            # p.removeAllUserDebugItems()
-            # # draw the eef x, y, z axes
-            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 0], [1, 0, 0], lineWidth=5)
-            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 1], [0, 1, 0], lineWidth=5)
-            # p.addUserDebugLine(current_pos, current_pos + 0.5 * current_rot[:, 2], [0, 0, 1], lineWidth=5)
-
-            # self.step_to_target(target_position, target_orientation)
             p.stepSimulation()
-            self.take_picture()
+            live_img, depth_buffer = self.take_picture()
+            if self.verbosity > 0:
+                points_debug_3d = self.draw_points_in_3d(live_img, depth_buffer, points_debug_3d)
             steps += 1
+        if self.verbosity > 0:
+            p.removeUserDebugItem(points_debug_3d)
 
     def step_to_target(self, target_position, target_orientation=None):
         """
@@ -204,8 +190,14 @@ class ArmEnv:
         """
         Take a picture with the wrist camera for the purpose of the simulation.
         """
-        width, height, projection_matrix, view_matrix, _ = self.get_camera_info()
-        p.getCameraImage(width, height, view_matrix, projection_matrix)
+        width, height, projection_matrix, view_matrix, _, _, _ = self.get_camera_info()
+        _, _, rgb_image, depth_buffer, _ = p.getCameraImage(width, height, view_matrix, projection_matrix)
+        rgb_image = np.array(rgb_image).reshape(height, width, -1).astype(np.uint8)
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGRA2RGB)
+
+        depth_buffer = np.array(depth_buffer).reshape(height, width).astype(np.float32)
+
+        return rgb_image, depth_buffer
 
     def is_target_reached(self, target_position, target_orientation=None):
         """
@@ -237,7 +229,7 @@ class ArmEnv:
         projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
         # find the camera position to be at the wrist of the robot
-        camera_position, rot_matrix = self.get_camera_position_and_orientation()
+        camera_position, rot_matrix = self.get_camera_position_and_rotation()
         init_camera_vector = (0, 0, 1)
         init_up_vector = (0, 1, 0)
         camera_vector = rot_matrix.dot(init_camera_vector)
@@ -251,16 +243,16 @@ class ArmEnv:
         p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 1], [0, 1, 0], lineWidth=5)
         p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 2], [0, 0, 1], lineWidth=5)
 
-        return width, height, projection_matrix, view_matrix, fov
+        return width, height, projection_matrix, view_matrix, fov, near, far
 
-    def get_camera_position_and_orientation(self):
-        eef_position, eef_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
-        eef_orientation = np.array(p.getMatrixFromQuaternion(eef_orientation)).reshape(3, 3)
+    def get_camera_position_and_rotation(self):
+        eef_position, eef_rotation = p.getLinkState(self.objects["arm"], 11)[:2]
+        eef_rotation = np.array(p.getMatrixFromQuaternion(eef_rotation)).reshape(3, 3)
         eef_to_camera_position, eef_to_camera_orientation = self.get_eef_to_camera_transform()
-        camera_position = np.array(eef_position) + np.dot(eef_orientation, eef_to_camera_position)
-        camera_orientation = np.dot(eef_orientation, eef_to_camera_orientation)
+        camera_position = np.array(eef_position) + np.dot(eef_rotation, eef_to_camera_position)
+        camera_rotation = np.dot(eef_rotation, eef_to_camera_orientation)
 
-        return camera_position, camera_orientation
+        return camera_position, camera_rotation
 
     def take_picture_and_save(self, filename):
         """
@@ -269,15 +261,7 @@ class ArmEnv:
         :return: the filename of the saved image
         :return: the depth buffer of the image
         """
-        width, height, projection_matrix, view_matrix, _ = self.get_camera_info()
-
-        # take a picture
-        _, _, rgb_image, depth_buffer, _ = p.getCameraImage(width, height, view_matrix,
-                                                            projection_matrix)
-        rgb_image = np.array(rgb_image).reshape(height, width, -1).astype(np.uint8)
-        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGRA2RGB)
-
-        depth_buffer = np.array(depth_buffer).reshape(height, width).astype(np.float32)
+        rgb_image, depth_buffer = self.take_picture()
 
         if filename is None:
             return
@@ -316,14 +300,16 @@ class ArmEnv:
         self.move_with_debug_dot(desired_pos, desired_rot)
 
     def move_with_debug_dot(self, desired_pos, desired_rot):
-        # add a red point at the desired position
-        red_dot = p.createVisualShape(p.GEOM_SPHERE, radius=0.02, rgbaColor=[1, 0, 0, 1],
-                                      visualFramePosition=desired_pos)
-        red_dot_id = p.createMultiBody(baseVisualShapeIndex=red_dot, baseMass=0, baseInertialFramePosition=desired_pos)
-        p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
+        if self.verbosity > 0:
+            # add a red point at the desired position
+            red_dot = p.createVisualShape(p.GEOM_SPHERE, radius=0.02, rgbaColor=[1, 0, 0, 1],
+                                          visualFramePosition=desired_pos)
+            red_dot_id = p.createMultiBody(baseVisualShapeIndex=red_dot, baseMass=0, baseInertialFramePosition=desired_pos)
+            p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
         # move the robot
         self.move_to_target(desired_pos, desired_rot)
-        p.removeBody(red_dot_id)
+        if self.verbosity > 0:
+            p.removeBody(red_dot_id)
 
     def replay_demo(self, demo):
         """
@@ -391,7 +377,7 @@ class ArmEnv:
         Requires camera calibration to go from a pixel distance to world distance
         """
         # to go from pixel distance to world distance we need to know the camera calibration
-        width, height, projection_matrix, view_matrix, fov = self.get_camera_info()
+        width, height, projection_matrix, view_matrix, fov, _, _ = self.get_camera_info()
         fx, fy, cx, cy = self.get_intrinsics(fov, width, height)
         T = self.get_extrinsics(view_matrix)
         t_meters = np.array([t[0] / fx, t[1] / fy, t[2]])
@@ -410,14 +396,16 @@ class ArmEnv:
                 depth (H,W,1) observations from camera.
                 intrinsics: intrinsics of the camera, used to
                 project pixels to 3D space.
-        Outputs: point_with_depth: list of [x,y,z] coordinates.
+        Outputs: point_with_depth: list of [x,y,z] coordinates in the camera frame.
 
         Projects the selected pixels to 3D space using intrinsics and
         depth value. Based on your setup the implementation may vary,
         but here you can find a simple example or the explicit formula:
         https://www.open3d.org/docs/0.6.0/python_api/open3d.geometry.create_point_cloud_from_rgbd_image.html.
         """
-        height, width, _, _, fov = self.get_camera_info()
+        width, height, _, _, fov, near, far = self.get_camera_info()
+        z_n = 2.0 * depth - 1.0
+        depth = 2.0 * near * far / (far + near - z_n * (far - near))
         fx = width / (2 * np.tan(np.radians(fov / 2)))
         fy = height / (2 * np.tan(np.radians(fov / 2)))
         cx = width / 2
@@ -425,8 +413,8 @@ class ArmEnv:
         projected_points = []
         for u, v in points:
             z = depth[u, v]
-            x = (u - cx) * z / fx
-            y = (v - cy) * z / fy
+            x = (cx - v) * z / fx
+            y = (cy - u) * z / fy
             projected_points.append([x, y, z])
         projected_points = np.array(projected_points)
         return projected_points
@@ -449,7 +437,7 @@ class ArmEnv:
         """
         if self.verbosity > 0:
             print("Moving in camera frame")
-        camera_position, camera_rotation = self.get_camera_position_and_orientation()
+        camera_position, camera_rotation = self.get_camera_position_and_rotation()
         camera_to_eef_position, camera_to_eef_orientation = self.get_eef_to_camera_transform()
         eef_position = camera_position - np.dot(camera_rotation, camera_to_eef_position)
         eef_rotation = np.dot(camera_rotation, np.linalg.inv(camera_to_eef_orientation))
@@ -472,6 +460,31 @@ class ArmEnv:
         new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat()
 
         self.move_with_debug_dot(new_eef_position, new_eef_orientation)
+
+    def project_points_to_world_frame(self, points):
+        camera_position, camera_rotation = self.get_camera_position_and_rotation()
+        world_points = []
+        for i in range(len(points)):
+            point = camera_position + np.dot(camera_rotation, points[i])
+            world_points.append(point)
+        return world_points
+
+    def draw_points_in_3d(self, live_img, depth_buffer, points):
+        all_pixels_in_camera_feed = []
+        for x in range(self.image_size):
+            for y in range(self.image_size):
+                all_pixels_in_camera_feed.append([x, y])
+        reduced_pixels = all_pixels_in_camera_feed[::8]
+        points3d = self.project_to_3d(reduced_pixels, depth_buffer)
+        world_points = self.project_points_to_world_frame(points3d)
+        # draw the points in 3D using debug points
+        colors = live_img.reshape(-1, 3) / 255.0  # Normalize BGR image values to [0, 1]
+        reduced_colors = colors[::8]
+        p.removeAllUserDebugItems()
+        if points != -1:
+            p.removeUserDebugItem(points)
+        points = p.addUserDebugPoints(world_points, reduced_colors, 5)
+        return points
 
 
 if __name__ == "__main__":
@@ -520,10 +533,10 @@ if __name__ == "__main__":
     # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
     # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
     # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
     env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
-    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
+    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
+    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
 
     # demo = env.record_demo()
     #
