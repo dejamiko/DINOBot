@@ -77,7 +77,7 @@ def find_transformation(X, Y):
 
     # Code taken from https://nghiaho.com/?page_id=671
     if np.linalg.det(R) < 0:
-        print("det(R) < 0, reflection detected!, correcting for it ...")
+        print("det(R) < 0, reflection detected")
         Vt[2, :] *= -1
         R = Vt.T @ U.T
 
@@ -140,7 +140,7 @@ def deploy_dinobot(env, data, config):
     :param config: The configuration object
     """
     rgb_bn, depth_bn, demo_vels = (
-        data["rgb_bn_path"],
+        data["rgb_bn"],
         data["depth_bn"],
         data["demo_vels"],
     )
@@ -231,12 +231,10 @@ if __name__ == "__main__":
 
     # RECORD DEMO:
     env = ArmEnv(config)
-    env.setup()
     data = env.record_demo()
 
     # TEST TIME DEPLOYMENT
     # Move/change the object and move the end-effector to the home (or a random) pose.
     env.reset()
     # load a new object
-    env.setup()
     deploy_dinobot(env, data, config)

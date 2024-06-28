@@ -28,7 +28,3 @@ class Environment(ABC):
     @abstractmethod
     def replay_demo(self, demo_velocities):
         pass
-
-    @abstractmethod
-    def setup(self):
-        pass

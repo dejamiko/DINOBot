@@ -9,8 +9,8 @@ import pybullet as p
 import pybullet_data
 from scipy.spatial.transform import Rotation
 
-from environment import Environment
 from config import Config
+from environment import Environment
 
 
 class ArmEnv(Environment):
@@ -235,7 +235,8 @@ class ArmEnv(Environment):
             camera_position, camera_position + 0.1 * camera_vector, up_vector
         )
 
-        self.draw_debug_camera_axis(camera_position, rot_matrix)
+        if self.config.VERBOSITY > 0:
+            self.draw_debug_camera_axis(camera_position, rot_matrix)
 
         return width, height, projection_matrix, view_matrix, fov, near, far
 
@@ -362,8 +363,7 @@ class ArmEnv(Environment):
             joint_states = p.getJointStates(self.objects["arm"], range(7))
             velocities.append([link_state[1] for link_state in joint_states])
 
-        return {"bn_image": bn_image, "bn_depth": bn_depth, "demo_vels": velocities}
-
+        return {"rgb_bn": bn_image, "depth_bn": bn_depth, "demo_vels": velocities}
 
     @staticmethod
     def get_intrinsics(fov, width, height):
@@ -397,6 +397,7 @@ class ArmEnv(Environment):
         Reset the simulation environment.
         """
         self._setup_simulation_basic()
+        self.load_object()
 
     def project_to_3d(self, points, depth):
         """
@@ -532,12 +533,6 @@ class ArmEnv(Environment):
             p.removeUserDebugItem(points)
         points = p.addUserDebugPoints(world_points, reduced_colors, 5)
         return points
-
-    def setup(self):
-        """
-        Set up the simulation environment.
-        """
-        self.load_object()
 
 
 if __name__ == "__main__":
