@@ -3,39 +3,55 @@ This script is my attempt at reimplementing the DINOBot algorithm with the DINO-
 
 Most functions were moved to the sim.py file and were implemented there.
 """
+
 import os
 import shutil
 import warnings
 
+import cv2
 import numpy as np
 import requests
 import torch
-import torchvision.transforms as T
 from PIL import Image
 from dino_vit_features.correspondences import draw_correspondences
 
+from config import Config
 from sim import ArmEnv
 
 warnings.filterwarnings("ignore")
 
-load_size = 224
-url = 'http://146.169.1.68:8000/infer'
-# Deployment hyperparameters
-ERR_THRESHOLD = 0.05  # A generic error between the two sets of points
-
 
 def find_correspondences(image_path1, image_path2, url):
-    with open(image_path1, 'rb') as f:
-        files = {'image1': f.read()}
-    with open(image_path2, 'rb') as f:
-        files['image2'] = f.read()
+    """
+    Find correspondences between two images using the DINO-ViT features. This uses the DINO server to extract the
+    features and find the correspondences between the two images.
+    :param image_path1: A path to the first image
+    :param image_path2: A path to the second image
+    :param url: The url of the DINO server
+    :return: The correspondences between the two images, the images with the correspondences drawn on them, and the time
+    taken to find the correspondences.
+    """
+    url += "correspondences"
+    with open(image_path1, "rb") as f:
+        files = {"image1": f.read()}
+    with open(image_path2, "rb") as f:
+        files["image2"] = f.read()
     response = requests.post(url, files=files)
     if response.status_code == 200:
         parsed_response = response.json()
-        image1_pil = Image.fromarray(np.array(parsed_response["image1_pil"], dtype='uint8'))
-        image2_pil = Image.fromarray(np.array(parsed_response["image2_pil"], dtype='uint8'))
-        return (parsed_response["points1"], parsed_response["points2"], image1_pil, image2_pil,
-                parsed_response["time_taken"])
+        image1_pil = Image.fromarray(
+            np.array(parsed_response["image1_pil"], dtype="uint8")
+        )
+        image2_pil = Image.fromarray(
+            np.array(parsed_response["image2_pil"], dtype="uint8")
+        )
+        return (
+            parsed_response["points1"],
+            parsed_response["points2"],
+            image1_pil,
+            image2_pil,
+            parsed_response["time_taken"],
+        )
     else:
         print(response.json())
 
@@ -71,25 +87,40 @@ def find_transformation(X, Y):
 
 
 def compute_error(points1, points2):
+    """
+    Compute the error between two sets of points for the purpose of stopping the alignment phase
+    :param points1: The first set of points
+    :param points2: The second set of points
+    :return: The error between the two sets of points. Calculated as the norm of the difference between the two sets of
+    points.
+    """
     return np.linalg.norm(np.array(points1) - np.array(points2))
 
 
-def filter_points(points1, points2):
+def save_rgb_image(image, filename):
     """
-    Filter out points that are very close to each other (as they are likely to be the background)
+    Take a picture with the wrist camera and save it to disk.
+    :param image: The image to save
+    :param filename: The filename to save the image as
+    :return: The path to the saved image
     """
-    new_points1 = []
-    new_points2 = []
-    for i in range(len(points1)):
-        if np.linalg.norm(np.array(points1[i]) - np.array(points2[i])) > 1:
-            new_points1.append(points1[i])
-            new_points2.append(points2[i])
-    return new_points1, new_points2
+    # first see if there already is an image with the same name
+    im_name = f"images/rgb_image_{filename}_0.png"
+    i = 0
+    while os.path.exists(im_name):
+        i += 1
+        im_name = f"images/rgb_image_{filename}_{i}.png"
+
+    cv2.imwrite(im_name, image)
+
+    return im_name
 
 
-def clear_images():
-    # empty the working image directory
-    folder = 'images/'
+def clear_images(config):
+    """
+    Clear all images from the working directory
+    """
+    folder = config.IMAGE_DIR
     for filename in os.listdir(folder):
         file_path = os.path.join(folder, filename)
         try:
@@ -98,81 +129,50 @@ def clear_images():
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
         except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
+            print("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
-def record_demo_data(env):
-    # RECORD DEMO:
-    # Move the end-effector to the bottleneck pose and store observation.
-    # Get rgbd from wrist camera.
-    rgb_bn, depth_bn = env.take_picture_and_save("bn")
-
-    # Record demonstration.
-    demo_vels = env.record_demo()
-
-    return {"rgb_bn": rgb_bn, "depth_bn": depth_bn, "demo_vels": demo_vels}
-
-
-def plot_points(image, points1, points2):
-    print("Plotting the points...")
-    # on image, plot points1 and points2
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.imshow(image)
-    for i in range(len(points1)):
-        ax.plot(points1[i][1], points1[i][0], 'ro')
-        ax.plot(points2[i][1], points2[i][0], 'bo')
-        ax.plot([points1[i][1], points2[i][1]], [points1[i][0], points2[i][0]], 'g-')
-    plt.show()
-
-
-def deploy_dinobot(env, data):
-    rgb_bn, depth_bn, demo_vels = data["rgb_bn"], data["depth_bn"], data["demo_vels"]
+def deploy_dinobot(env, data, config):
+    """
+    Run the main dinobot loop with a single object
+    :param env: The environment in which the robot is operating
+    :param data: The data containing the bottleneck images and the demonstration velocities (after semantic retrieval)
+    :param config: The configuration object
+    """
+    rgb_bn, depth_bn, demo_vels = (
+        data["rgb_bn_path"],
+        data["depth_bn"],
+        data["demo_vels"],
+    )
+    rgb_bn_path = save_rgb_image(rgb_bn, "bn")
     error = np.inf
-    while error > ERR_THRESHOLD:
+    while error > config.ERR_THRESHOLD:
         # Collect observations at the current pose.
-        rgb_live, depth_live = env.take_picture_and_save("lv")
+        rgb_live, depth_live = env.get_rgbd_image()
+        rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        points1, points2, image1_pil, image2_pil, time = find_correspondences(rgb_bn, rgb_live, url)
-
-        # filter out points that are very close to each other (as they are likely to be the background)
-        # points1, points2 = filter_points(points1, points2)
+        points1, points2, image1_pil, image2_pil, time = find_correspondences(
+            rgb_bn_path, rgb_live_path, config.BASE_URL
+        )
 
         # save the images
         fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
-        fig1.savefig(f'images/image1_correspondences.png')
-        fig2.savefig(f'images/image2_correspondences.png')
+        fig1.savefig(f"images/image1_correspondences.png")
+        fig2.savefig(f"images/image2_correspondences.png")
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
-        # points1 = add_depth(points1, depth_bn)
-        # points2 = add_depth(points2, depth_live)
         points1 = env.project_to_3d(points1, depth_bn)
         points2 = env.project_to_3d(points2, depth_live)
-
-        print("points1", points1)
-        print("points2", points2)
 
         error = compute_error(points1, points2)
         print("error", error)
 
-        if error < ERR_THRESHOLD:
+        if error < config.ERR_THRESHOLD:
             break
 
         # Find rigid translation and rotation that aligns the points by minimising error, using SVD.
         R, t = find_transformation(points1, points2)
-        print("R", R)
-        print("t", t)
-
-        # transform the points to plot them
-        # points1_cp = np.array(points1)
-        # points1_cp = np.dot(points1_cp, R.T) + t
-        # # plot points1 and points2 to see if they are aligned
-        # plot_points(image2_pil, points1_cp, points2)
-
-        # A function to convert pixel distance into meters based on calibration of camera.
-        # t_meters = env.convert_pixels_to_meters(t)
-        # print("t_meters", t, "R", R)
 
         # Move robot
         env.move_in_camera_frame(t, R)
@@ -181,30 +181,36 @@ def deploy_dinobot(env, data):
     env.replay_demo(demo_vels)
 
 
-def get_all_object_images(env):
-    return "images/"
+def get_embeddings(image_path, url):
+    """
+    Get the embeddings of an image from the DINO server using the embeddings endpoint
+    :param image_path: The path to the image
+    :param url: The url of the DINO server
+    :return: The embeddings of the image
+    """
+    url += "embeddings"
+    with open(image_path, "rb") as f:
+        files = {"image": f.read()}
+    response = requests.post(url, files=files)
+    if response.status_code == 200:
+        parsed_response = response.json()
+        return parsed_response["embeddings"]
+    else:
+        print(response.json())
 
 
-def calculate_object_similarities(img_directory):
-    dino = torch.hub.load('facebookresearch/dino:main', 'dino_vitb8')
-    # dino = dino.cuda().float()
-
-    image_transforms = T.Compose([
-        T.Resize(256, interpolation=T.InterpolationMode.BICUBIC),
-        T.CenterCrop(224),
-        T.ToTensor(),
-        T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ])
-
+def calculate_object_similarities(config):
+    """
+    Calculate the similarities between all images in a directory using the embeddings from the DINO server and the cosine
+    similarity metric.
+    :param config: The configuration object
+    :return: A dictionary containing the similarities between all pairs of images
+    """
     image_embeddings = {}
-    for filename in os.listdir(img_directory):
-        file_path = os.path.join(img_directory, filename)
-        img = Image.open(file_path)
-        img = image_transforms(img)
-        img = img.unsqueeze(0)
-        with torch.no_grad():
-            pan_emb = dino(img)
-        image_embeddings[filename.split(".")[0]] = pan_emb
+    for filename in os.listdir(config.IMAGE_DIR):
+        file_path = os.path.join(config.IMAGE_DIR, filename)
+        img_emb = get_embeddings(file_path, config.BASE_URL)
+        image_embeddings[filename.split(".")[0]] = img_emb
 
     cos_sim = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
 
@@ -218,25 +224,19 @@ def calculate_object_similarities(img_directory):
 
 
 if __name__ == "__main__":
-    clear_images()
+    config = Config()
+    config.VERBOSITY = 0
+    # Remove all images from the working directory
+    clear_images(config)
 
-    env = ArmEnv(load_size)
-    env.verbosity = 0
-    env.load_object()
-
-    # this can be one demo or multiple demos
-    data = record_demo_data(env)
+    # RECORD DEMO:
+    env = ArmEnv(config)
+    env.setup()
+    data = env.record_demo()
 
     # TEST TIME DEPLOYMENT
     # Move/change the object and move the end-effector to the home (or a random) pose.
     env.reset()
     # load a new object
-    env.load_object()
-
-    img_directory = get_all_object_images(env)
-    # img_directory = "images/"
-    # similarities = calculate_object_similarities(img_directory)
-    #
-    # print(similarities)
-
-    deploy_dinobot(env, data)
+    env.setup()
+    deploy_dinobot(env, data, config)

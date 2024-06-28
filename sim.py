@@ -3,33 +3,31 @@ This file contains the code related to the simulation environment. It can be use
 or for small independent experiments with the pybullet simulation environment.
 """
 
-import os
-import time
-
 import cv2
 import numpy as np
 import pybullet as p
 import pybullet_data
 from scipy.spatial.transform import Rotation
 
+from environment import Environment
+from config import Config
 
-class ArmEnv:
+
+class ArmEnv(Environment):
     """
     A class that sets up the simulation environment and provides functions to interact with it. It contains a table,
     an arm, and some objects that can be placed on the table.
     """
 
-    def __init__(self, image_size=224):
+    def __init__(self, config):
         """
         Initialize the simulation environment.
         """
+        super().__init__(config)
         self.objects = {}
-        self.image_size = image_size
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
-
-        self.verbosity = 1
 
     def _setup_simulation_basic(self):
         """
@@ -41,31 +39,36 @@ class ArmEnv:
 
         p.loadURDF("plane.urdf", globalScaling=100)
 
-        # load a table
-        # self.objects["table"] = p.loadURDF("table/table.urdf", [0.5, 0, 0])
-
-        # load the arm on top of the table
-        self.objects["arm"] = p.loadURDF("franka_panda/panda.urdf", [1, 1, 0], useFixedBase=True)
+        self.objects["arm"] = p.loadURDF(
+            "franka_panda/panda.urdf", [1, 1, 0], useFixedBase=True
+        )
 
         focus_position, _ = p.getBasePositionAndOrientation(self.objects["arm"])
-        p.resetDebugVisualizerCamera(cameraDistance=3, cameraYaw=0, cameraPitch=-40,
-                                     cameraTargetPosition=focus_position)
+        p.resetDebugVisualizerCamera(
+            cameraDistance=3,
+            cameraYaw=0,
+            cameraPitch=-40,
+            cameraTargetPosition=focus_position,
+        )
 
     def load_object(self, x=None, y=None, object_path="jenga/jenga.urdf"):
         """
         Load an object on the table and move the arm so the camera can see it.
         :param x: the x-coordinate of the object. If None, a random x-coordinate is chosen.
         :param y: the y-coordinate of the object. If None, a random y-coordinate is chosen.
-        :param object_path: the path to the object URDF file. Default is "objects/mug.urdf".
+        :param object_path: the path to the object URDF file
         """
         # load some object on the table somewhere random (within a certain range)
         pos_x = x if x is not None else np.random.uniform(1.6, 1.8)
         pos_y = y if y is not None else np.random.uniform(0.9, 1.1)
         angle = np.random.uniform(0, 2 * np.pi)
-        self.objects[f"object"] = p.loadURDF(object_path, [pos_x, pos_y, 0.5],
-                                             p.getQuaternionFromEuler([0, 0, angle]))
+        self.objects[f"object"] = p.loadURDF(
+            object_path, [pos_x, pos_y, 0.5], p.getQuaternionFromEuler([0, 0, angle])
+        )
         colour = np.random.uniform(0, 1, 3)
-        p.changeVisualShape(self.objects[f"object"], -1, rgbaColor=colour.tolist() + [1])
+        p.changeVisualShape(
+            self.objects[f"object"], -1, rgbaColor=colour.tolist() + [1]
+        )
 
         # let the object drop
         for i in range(100):
@@ -78,41 +81,6 @@ class ArmEnv:
             pos = [1.7, 1, 0.5]
         while not self.is_target_reached(pos):
             self.step_to_target(pos)
-
-    def load_cubes(self):
-        """
-        Load some cubes on the table and move the arm so the camera can see them.
-        """
-        min_num_cubes = 2
-        max_num_cubes = 4
-        num_cubes = np.random.randint(min_num_cubes, max_num_cubes + 1)
-        for i in range(num_cubes):
-            pos_x = np.random.uniform(0.6, 0.8)
-            pos_y = np.random.uniform(-0.1, 0.1)
-            angle = np.random.uniform(0, 2 * np.pi)
-            self.objects[f"cube{i}"] = p.loadURDF("cube_small.urdf", [pos_x, pos_y, 1],
-                                                  p.getQuaternionFromEuler([0, 0, angle]))
-            colour = np.random.uniform(0, 1, 3)
-            p.changeVisualShape(self.objects[f"cube{i}"], -1, rgbaColor=colour.tolist() + [1])
-
-        # let the cubes drop
-        for i in range(100):
-            p.stepSimulation()
-
-        # move the arm a little bit so the camera can see the cubes
-        pos = [0.7, 0, 1]
-        while not self.is_target_reached(pos):
-            self.step_to_target(pos)
-
-    def get_random_cube_index(self):
-        """
-        Get a random cube index.
-        :return: the index of a random cube
-        """
-        # find how many cubes we have
-        num_cubes = len(self.objects) - 2
-        cube_index = np.random.randint(0, num_cubes)
-        return cube_index
 
     def get_target_position(self, name="object"):
         """
@@ -141,32 +109,51 @@ class ArmEnv:
                 rest_poses.append(joint_info[8] + joint_info[9] / 2)
 
         if target_orientation is not None:
-            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position,
-                                                                  target_orientation, lowerLimits=lower_limits,
-                                                                  upperLimits=upper_limits, jointRanges=joint_ranges,
-                                                                  restPoses=rest_poses)
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"],
+                11,
+                target_position,
+                target_orientation,
+                lowerLimits=lower_limits,
+                upperLimits=upper_limits,
+                jointRanges=joint_ranges,
+                restPoses=rest_poses,
+            )
         else:
-            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position,
-                                                                  lowerLimits=lower_limits, upperLimits=upper_limits,
-                                                                  jointRanges=joint_ranges, restPoses=rest_poses)
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"],
+                11,
+                target_position,
+                lowerLimits=lower_limits,
+                upperLimits=upper_limits,
+                jointRanges=joint_ranges,
+                restPoses=rest_poses,
+            )
 
-        p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
-                                    targetPositions=target_joint_positions)
+        p.setJointMotorControlArray(
+            self.objects["arm"],
+            range(9),
+            p.POSITION_CONTROL,
+            targetPositions=target_joint_positions,
+        )
 
         error, steps = np.inf, 0
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             points_debug_3d = -1
         while error > 0.01 and steps < 100:
             current_pos, current_rot = p.getLinkState(self.objects["arm"], 11)[:2]
-            error = np.linalg.norm(np.array(target_position) - np.array(current_pos)) + np.linalg.norm(
-                np.array(target_orientation) - np.array(current_rot))
+            error = np.linalg.norm(
+                np.array(target_position) - np.array(current_pos)
+            ) + np.linalg.norm(np.array(target_orientation) - np.array(current_rot))
 
             p.stepSimulation()
-            live_img, depth_buffer = self.take_picture()
-            if self.verbosity > 0:
-                points_debug_3d = self.draw_points_in_3d(live_img, depth_buffer, points_debug_3d)
+            live_img, depth_buffer = self.get_rgbd_image()
+            if self.config.VERBOSITY > 0:
+                points_debug_3d = self.draw_points_in_3d(
+                    live_img, depth_buffer, points_debug_3d
+                )
             steps += 1
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             p.removeUserDebugItem(points_debug_3d)
 
     def step_to_target(self, target_position, target_orientation=None):
@@ -176,22 +163,31 @@ class ArmEnv:
         :param target_position: the position of the target
         """
         if target_orientation is not None:
-            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position,
-                                                                  target_orientation)
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"], 11, target_position, target_orientation
+            )
         else:
-            target_joint_positions = p.calculateInverseKinematics(self.objects["arm"], 11, target_position)
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"], 11, target_position
+            )
 
-        p.setJointMotorControlArray(self.objects["arm"], range(9), p.POSITION_CONTROL,
-                                    targetPositions=target_joint_positions)
+        p.setJointMotorControlArray(
+            self.objects["arm"],
+            range(9),
+            p.POSITION_CONTROL,
+            targetPositions=target_joint_positions,
+        )
         p.stepSimulation()
-        self.take_picture()
+        self.get_rgbd_image()
 
-    def take_picture(self):
+    def get_rgbd_image(self):
         """
         Take a picture with the wrist camera for the purpose of the simulation.
         """
         width, height, projection_matrix, view_matrix, _, _, _ = self.get_camera_info()
-        _, _, rgb_image, depth_buffer, _ = p.getCameraImage(width, height, view_matrix, projection_matrix)
+        _, _, rgb_image, depth_buffer, _ = p.getCameraImage(
+            width, height, view_matrix, projection_matrix
+        )
         rgb_image = np.array(rgb_image).reshape(height, width, -1).astype(np.uint8)
         rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGRA2RGB)
 
@@ -211,16 +207,17 @@ class ArmEnv:
             target_orientation = gripper_orientation
         if len(target_orientation) != 4:
             target_orientation = Rotation.from_matrix(target_orientation).as_quat()
-        return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(target_orientation,
-                                                                                    gripper_orientation, atol=0.05)
+        return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(
+            target_orientation, gripper_orientation, atol=0.05
+        )
 
     def get_camera_info(self):
         """
-        Get the camera information for the wrist camera. This might require some more attention.
+        Get the camera information for the wrist camera.
         :return: the width, height, projection matrix, and view matrix of the camera
         """
-        width = self.image_size
-        height = self.image_size
+        width = self.config.IMAGE_SIZE
+        height = self.config.IMAGE_SIZE
 
         fov = 60
         aspect = width / height
@@ -234,49 +231,59 @@ class ArmEnv:
         init_up_vector = (0, 1, 0)
         camera_vector = rot_matrix.dot(init_camera_vector)
         up_vector = rot_matrix.dot(init_up_vector)
-        view_matrix = p.computeViewMatrix(camera_position, camera_position + 0.1 * camera_vector, up_vector)
+        view_matrix = p.computeViewMatrix(
+            camera_position, camera_position + 0.1 * camera_vector, up_vector
+        )
 
-        # clear the previous camera axes
-        p.removeAllUserDebugItems()
-        # draw the camera x, y, z axes
-        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 0], [1, 0, 0], lineWidth=5)
-        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 1], [0, 1, 0], lineWidth=5)
-        p.addUserDebugLine(camera_position, camera_position + 0.5 * rot_matrix[:, 2], [0, 0, 1], lineWidth=5)
+        self.draw_debug_camera_axis(camera_position, rot_matrix)
 
         return width, height, projection_matrix, view_matrix, fov, near, far
 
+    @staticmethod
+    def draw_debug_camera_axis(camera_position, rot_matrix):
+        """
+        Draw the camera axes for debugging purposes.
+        :param camera_position: The position of the camera
+        :param rot_matrix: The rotation matrix of the camera
+        """
+        # clear the previous camera axes
+        p.removeAllUserDebugItems()
+        # draw the camera x, y, z axes
+        p.addUserDebugLine(
+            camera_position,
+            camera_position + 0.5 * rot_matrix[:, 0],
+            [1, 0, 0],
+            lineWidth=5,
+        )
+        p.addUserDebugLine(
+            camera_position,
+            camera_position + 0.5 * rot_matrix[:, 1],
+            [0, 1, 0],
+            lineWidth=5,
+        )
+        p.addUserDebugLine(
+            camera_position,
+            camera_position + 0.5 * rot_matrix[:, 2],
+            [0, 0, 1],
+            lineWidth=5,
+        )
+
     def get_camera_position_and_rotation(self):
+        """
+        Get the position and rotation of the camera.
+        :return: the position and rotation of the camera
+        """
         eef_position, eef_rotation = p.getLinkState(self.objects["arm"], 11)[:2]
         eef_rotation = np.array(p.getMatrixFromQuaternion(eef_rotation)).reshape(3, 3)
-        eef_to_camera_position, eef_to_camera_orientation = self.get_eef_to_camera_transform()
-        camera_position = np.array(eef_position) + np.dot(eef_rotation, eef_to_camera_position)
+        eef_to_camera_position, eef_to_camera_orientation = (
+            self.get_eef_to_camera_transform()
+        )
+        camera_position = np.array(eef_position) + np.dot(
+            eef_rotation, eef_to_camera_position
+        )
         camera_rotation = np.dot(eef_rotation, eef_to_camera_orientation)
 
         return camera_position, camera_rotation
-
-    def take_picture_and_save(self, filename):
-        """
-        Take a picture with the wrist camera and save it to disk.
-        :param filename: the filename of the saved image
-        :return: the filename of the saved image
-        :return: the depth buffer of the image
-        """
-        rgb_image, depth_buffer = self.take_picture()
-
-        if filename is None:
-            return
-
-        # save the image to disk
-        # first see if there already is an image with the same name
-        im_name = f"images/rgb_image_{filename}_0.png"
-        i = 0
-        while os.path.exists(im_name):
-            i += 1
-            im_name = f"images/rgb_image_{filename}_{i}.png"
-
-        cv2.imwrite(im_name, rgb_image)
-
-        return im_name, depth_buffer
 
     def move(self, t, R):
         """
@@ -289,48 +296,64 @@ class ArmEnv:
         current_rot = np.array(p.getMatrixFromQuaternion(current_rot)).reshape(3, 3)
 
         # calculate the desired position and rotation in world frame
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             print("Current position:", current_pos, "Current rotation:", current_rot)
         desired_pos = current_pos + np.dot(current_rot, t)
         desired_rot = np.dot(current_rot, R)
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             print("Desired position:", desired_pos, "Desired rotation:", desired_rot)
         desired_rot = Rotation.from_matrix(desired_rot).as_quat()
 
         self.move_with_debug_dot(desired_pos, desired_rot)
 
     def move_with_debug_dot(self, desired_pos, desired_rot):
-        if self.verbosity > 0:
+        """
+        Move the robot to the desired position and orientation, and add a red point at the desired position.
+        :param desired_pos: The desired position
+        :param desired_rot: The desired rotation
+        """
+        if self.config.VERBOSITY > 0:
             # add a red point at the desired position
-            red_dot = p.createVisualShape(p.GEOM_SPHERE, radius=0.02, rgbaColor=[1, 0, 0, 1],
-                                          visualFramePosition=desired_pos)
-            red_dot_id = p.createMultiBody(baseVisualShapeIndex=red_dot, baseMass=0, baseInertialFramePosition=desired_pos)
+            red_dot = p.createVisualShape(
+                p.GEOM_SPHERE,
+                radius=0.02,
+                rgbaColor=[1, 0, 0, 1],
+                visualFramePosition=desired_pos,
+            )
+            red_dot_id = p.createMultiBody(
+                baseVisualShapeIndex=red_dot,
+                baseMass=0,
+                baseInertialFramePosition=desired_pos,
+            )
             p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
         # move the robot
         self.move_to_target(desired_pos, desired_rot)
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             p.removeBody(red_dot_id)
 
     def replay_demo(self, demo):
         """
-        Inputs: demo: list of velocities
-
         Replays a demonstration by moving the end-effector according to the input velocities.
+        :param demo: The demonstration to replay
         """
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             print("Replaying demonstration", demo)
         for velocities in demo:
-            p.setJointMotorControlArray(self.objects["arm"], range(7), p.VELOCITY_CONTROL, targetVelocities=velocities)
+            p.setJointMotorControlArray(
+                self.objects["arm"],
+                range(7),
+                p.VELOCITY_CONTROL,
+                targetVelocities=velocities,
+            )
             p.stepSimulation()
-            self.take_picture()
+            self.get_rgbd_image()
 
     def record_demo(self):
         """
         Record a demonstration by moving the end-effector, and stores velocities
         that can then be replayed by the "replay_demo" function.
-
-        :return: a list of velocities for each step and each joint
         """
+        bn_image, bn_depth = self.get_rgbd_image()
         velocities = []
         target_pos = self.get_target_position()
 
@@ -339,7 +362,8 @@ class ArmEnv:
             joint_states = p.getJointStates(self.objects["arm"], range(7))
             velocities.append([link_state[1] for link_state in joint_states])
 
-        return velocities
+        return {"bn_image": bn_image, "bn_depth": bn_depth, "demo_vels": velocities}
+
 
     @staticmethod
     def get_intrinsics(fov, width, height):
@@ -361,28 +385,12 @@ class ArmEnv:
         Adapted from https://stackoverflow.com/questions/60430958/understanding-the-view-and-projection-matrix-from-pybullet/60450420#60450420
         """
         view_matrix = np.array(view_matrix).reshape(4, 4)
-        Tc = np.array([[1, 0, 0, 0],
-                       [0, -1, 0, 0],
-                       [0, 0, -1, 0],
-                       [0, 0, 0, 1]]).reshape(4, 4)
+        Tc = np.array(
+            [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
+        ).reshape(4, 4)
         T = np.linalg.inv(view_matrix) @ Tc
 
         return T
-
-    def convert_pixels_to_meters(self, t):
-        """
-        Inputs: t : (x,y,z) translation of the end-effector in pixel-space/frame
-        Outputs: t_meters : (x,y,z) translation of the end-effector in world frame
-
-        Requires camera calibration to go from a pixel distance to world distance
-        """
-        # to go from pixel distance to world distance we need to know the camera calibration
-        width, height, projection_matrix, view_matrix, fov, _, _ = self.get_camera_info()
-        fx, fy, cx, cy = self.get_intrinsics(fov, width, height)
-        T = self.get_extrinsics(view_matrix)
-        t_meters = np.array([t[0] / fx, t[1] / fy, t[2]])
-        t_meters = T[:3, :3] @ t_meters
-        return t_meters
 
     def reset(self):
         """
@@ -406,10 +414,7 @@ class ArmEnv:
         width, height, _, _, fov, near, far = self.get_camera_info()
         z_n = 2.0 * depth - 1.0
         depth = 2.0 * near * far / (far + near - z_n * (far - near))
-        fx = width / (2 * np.tan(np.radians(fov / 2)))
-        fy = height / (2 * np.tan(np.radians(fov / 2)))
-        cx = width / 2
-        cy = height / 2
+        fx, fy, cx, cy = self.get_intrinsics(fov, width, height)
         projected_points = []
         for u, v in points:
             z = depth[u, v]
@@ -426,7 +431,8 @@ class ArmEnv:
         """
         camera_to_eef_position = np.array([0, 0, 0.05])
         camera_to_eef_orientation = np.array(
-            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, - np.pi / 2]))).reshape(3, 3)
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))
+        ).reshape(3, 3)
         return camera_to_eef_position, camera_to_eef_orientation
 
     def move_in_camera_frame(self, t, R):
@@ -435,33 +441,67 @@ class ArmEnv:
         :param t: The translation in the camera frame
         :param R: The rotation in the camera frame
         """
-        if self.verbosity > 0:
+        if self.config.VERBOSITY > 0:
             print("Moving in camera frame")
         camera_position, camera_rotation = self.get_camera_position_and_rotation()
-        camera_to_eef_position, camera_to_eef_orientation = self.get_eef_to_camera_transform()
+        camera_to_eef_position, camera_to_eef_orientation = (
+            self.get_eef_to_camera_transform()
+        )
         eef_position = camera_position - np.dot(camera_rotation, camera_to_eef_position)
         eef_rotation = np.dot(camera_rotation, np.linalg.inv(camera_to_eef_orientation))
-        eef_position_actual, eef_orientation_actual = p.getLinkState(self.objects["arm"], 11)[:2]
-        assert np.allclose(eef_position, eef_position_actual), f"{eef_position} != {eef_position_actual}"
-        assert np.allclose(eef_rotation, np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)), \
-            f"{eef_rotation} != {np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)}"
+        eef_position_actual, eef_orientation_actual = p.getLinkState(
+            self.objects["arm"], 11
+        )[:2]
+        assert np.allclose(
+            eef_position, eef_position_actual
+        ), f"{eef_position} != {eef_position_actual}"
+        assert np.allclose(
+            eef_rotation,
+            np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3),
+        ), f"{eef_rotation} != {np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)}"
         new_camera_position = camera_position + np.dot(camera_rotation, t)
         new_camera_rotation = np.dot(camera_rotation, R)
 
-        new_eef_position = new_camera_position - np.dot(new_camera_rotation, camera_to_eef_position)
-        new_eef_orientation = np.dot(new_camera_rotation, np.linalg.inv(camera_to_eef_orientation))
+        new_eef_position = new_camera_position - np.dot(
+            new_camera_rotation, camera_to_eef_position
+        )
+        new_eef_orientation = np.dot(
+            new_camera_rotation, np.linalg.inv(camera_to_eef_orientation)
+        )
 
-        if self.verbosity > 0:
-            print("Old camera position:", camera_position, "Old camera orientation:", camera_rotation)
-            print("New camera position:", new_camera_position, "New camera orientation:", new_camera_rotation)
-            print("Old eef position:", eef_position, "Old eef orientation:", eef_rotation)
-            print("New eef position:", new_eef_position, "New eef orientation:", new_eef_orientation)
+        if self.config.VERBOSITY > 0:
+            print(
+                "Old camera position:",
+                camera_position,
+                "Old camera orientation:",
+                camera_rotation,
+            )
+            print(
+                "New camera position:",
+                new_camera_position,
+                "New camera orientation:",
+                new_camera_rotation,
+            )
+            print(
+                "Old eef position:", eef_position, "Old eef orientation:", eef_rotation
+            )
+            print(
+                "New eef position:",
+                new_eef_position,
+                "New eef orientation:",
+                new_eef_orientation,
+            )
 
         new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat()
 
         self.move_with_debug_dot(new_eef_position, new_eef_orientation)
 
     def project_points_to_world_frame(self, points):
+        """
+        Project points from the camera frame to the world frame.
+        :param points: The points to project
+        :return: The points in the world frame
+        """
         camera_position, camera_rotation = self.get_camera_position_and_rotation()
         world_points = []
         for i in range(len(points)):
@@ -470,9 +510,16 @@ class ArmEnv:
         return world_points
 
     def draw_points_in_3d(self, live_img, depth_buffer, points):
+        """
+        Draw projections of the points in 3D space.
+        :param live_img: The live image from the camera
+        :param depth_buffer: The depth buffer from the camera
+        :param points: The points to draw
+        :return: The points drawn in 3D space
+        """
         all_pixels_in_camera_feed = []
-        for x in range(self.image_size):
-            for y in range(self.image_size):
+        for x in range(self.config.IMAGE_SIZE):
+            for y in range(self.config.IMAGE_SIZE):
                 all_pixels_in_camera_feed.append([x, y])
         reduced_pixels = all_pixels_in_camera_feed[::8]
         points3d = self.project_to_3d(reduced_pixels, depth_buffer)
@@ -486,12 +533,19 @@ class ArmEnv:
         points = p.addUserDebugPoints(world_points, reduced_colors, 5)
         return points
 
+    def setup(self):
+        """
+        Set up the simulation environment.
+        """
+        self.load_object()
+
 
 if __name__ == "__main__":
     """
     A sample script to spawn some cubes on a table and move the robot arm towards one of them.
     """
-    env = ArmEnv()
+    config = Config()
+    env = ArmEnv(config)
 
     # env.load_object(x=0.6, y=0.3)
     # pos = env.get_target_position("object")
@@ -535,8 +589,18 @@ if __name__ == "__main__":
     # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
     env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
     env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
-    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
+    env.move_in_camera_frame(
+        np.array([-0.3, 0, 0]),
+        np.array(
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))
+        ).reshape(3, 3),
+    )
+    env.move_in_camera_frame(
+        np.array([0.3, 0, 0]),
+        np.array(
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))
+        ).reshape(3, 3),
+    )
 
     # demo = env.record_demo()
     #
