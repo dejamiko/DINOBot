@@ -28,6 +28,7 @@ class ArmEnv(Environment):
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
+        self.load_object()
 
     def _setup_simulation_basic(self):
         """
