@@ -13,7 +13,6 @@ import numpy as np
 import requests
 import torch
 from PIL import Image
-from dino_vit_features.correspondences import draw_correspondences
 
 from config import Config
 from sim import ArmEnv
@@ -21,37 +20,49 @@ from sim import ArmEnv
 warnings.filterwarnings("ignore")
 
 
-def find_correspondences(image_path1, image_path2, url):
+def find_correspondences(image_path1, image_path2, url, draw=False):
     """
     Find correspondences between two images using the DINO-ViT features. This uses the DINO server to extract the
     features and find the correspondences between the two images.
     :param image_path1: A path to the first image
     :param image_path2: A path to the second image
     :param url: The url of the DINO server
-    :return: The correspondences between the two images, the images with the correspondences drawn on them, and the time
-    taken to find the correspondences.
+    :param draw: A flag to determine whether to draw the correspondences on the images
+    :return: The correspondences between the two images, the two images, the images with the correspondences drawn on
+    them, and the time taken to find the correspondences. If draw is False, the images with the correspondences are not
+    returned.
     """
-    url += "correspondences"
-    with open(image_path1, "rb") as f:
-        files = {"image1": f.read()}
-    with open(image_path2, "rb") as f:
-        files["image2"] = f.read()
-    response = requests.post(url, files=files)
+    url += 'correspondences'
+    with open(image_path1, 'rb') as f:
+        files = {'image1': f.read()}
+    with open(image_path2, 'rb') as f:
+        files['image2'] = f.read()
+    args = {'draw': draw}
+    response = requests.post(url, files=files, data=args)
     if response.status_code == 200:
         parsed_response = response.json()
-        image1_pil = Image.fromarray(
-            np.array(parsed_response["image1_pil"], dtype="uint8")
-        )
-        image2_pil = Image.fromarray(
-            np.array(parsed_response["image2_pil"], dtype="uint8")
-        )
-        return (
-            parsed_response["points1"],
-            parsed_response["points2"],
-            image1_pil,
-            image2_pil,
-            parsed_response["time_taken"],
-        )
+        image1_pil = Image.fromarray(np.array(parsed_response["image1_pil"], dtype='uint8'))
+        image2_pil = Image.fromarray(np.array(parsed_response["image2_pil"], dtype='uint8'))
+        if draw:
+            image1_correspondences = Image.fromarray(np.array(parsed_response["image1_correspondences"], dtype='uint8'))
+            image2_correspondences = Image.fromarray(np.array(parsed_response["image2_correspondences"], dtype='uint8'))
+            return (
+                parsed_response["points1"],
+                parsed_response["points2"],
+                image1_pil,
+                image2_pil,
+                image1_correspondences,
+                image2_correspondences,
+                parsed_response["time_taken"]
+            )
+        else:
+            return (
+                parsed_response["points1"],
+                parsed_response["points2"],
+                image1_pil,
+                image2_pil,
+                parsed_response["time_taken"]
+            )
     else:
         print(response.json())
 
@@ -152,21 +163,20 @@ def deploy_dinobot(env, data, config):
         rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        points1, points2, image1_pil, image2_pil, time = find_correspondences(
-            rgb_bn_path, rgb_live_path, config.BASE_URL
+        points1, points2, image1_pil, image2_pil, img1_c, img2_c, time = find_correspondences(
+            rgb_bn_path, rgb_live_path, config.BASE_URL, draw=True
         )
 
         # save the images
-        fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
-        fig1.savefig(f"images/image1_correspondences.png")
-        fig2.savefig(f"images/image2_correspondences.png")
+        img1_c.save('images/image1.png')
+        img2_c.save('images/image2.png')
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
         points1 = env.project_to_3d(points1, depth_bn)
         points2 = env.project_to_3d(points2, depth_live)
 
         error = compute_error(points1, points2)
-        print("error", error)
+        print(f"Error: {error}, time taken: {time}")
 
         if error < config.ERR_THRESHOLD:
             break
