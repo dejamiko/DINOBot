@@ -1,12 +1,11 @@
 """
-This script is my attempt at reimplementing the DINOBot algorithm with the DINO-ViT features and pybullet simulation.
-
-Most functions were moved to the sim.py file and were implemented there.
+This is a reimplementation of the DINOBot algorithm. It allows for (hopefully) effortless swapping in different
+environments. A server running the DINO model is used to offload the feature extraction and correspondence finding
+processes.
 """
 
 import os
 import shutil
-import warnings
 
 import cv2
 import numpy as np
@@ -16,8 +15,6 @@ from PIL import Image
 
 from config import Config
 from sim import ArmEnv
-
-warnings.filterwarnings("ignore")
 
 
 def find_correspondences(image_path1, image_path2, url, draw=False):
@@ -41,16 +38,12 @@ def find_correspondences(image_path1, image_path2, url, draw=False):
     response = requests.post(url, files=files, data=args)
     if response.status_code == 200:
         parsed_response = response.json()
-        image1_pil = Image.fromarray(np.array(parsed_response["image1_pil"], dtype='uint8'))
-        image2_pil = Image.fromarray(np.array(parsed_response["image2_pil"], dtype='uint8'))
         if draw:
             image1_correspondences = Image.fromarray(np.array(parsed_response["image1_correspondences"], dtype='uint8'))
             image2_correspondences = Image.fromarray(np.array(parsed_response["image2_correspondences"], dtype='uint8'))
             return (
                 parsed_response["points1"],
                 parsed_response["points2"],
-                image1_pil,
-                image2_pil,
                 image1_correspondences,
                 image2_correspondences,
                 parsed_response["time_taken"]
@@ -59,8 +52,6 @@ def find_correspondences(image_path1, image_path2, url, draw=False):
             return (
                 parsed_response["points1"],
                 parsed_response["points2"],
-                image1_pil,
-                image2_pil,
                 parsed_response["time_taken"]
             )
     else:
@@ -131,6 +122,8 @@ def clear_images(config):
     """
     Clear all images from the working directory
     """
+    if not os.path.exists(config.IMAGE_DIR):
+        os.makedirs(config.IMAGE_DIR)
     folder = config.IMAGE_DIR
     for filename in os.listdir(folder):
         file_path = os.path.join(folder, filename)
@@ -163,7 +156,7 @@ def deploy_dinobot(env, data, config):
         rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        points1, points2, image1_pil, image2_pil, img1_c, img2_c, time = find_correspondences(
+        points1, points2, img1_c, img2_c, time = find_correspondences(
             rgb_bn_path, rgb_live_path, config.BASE_URL, draw=True
         )
 
