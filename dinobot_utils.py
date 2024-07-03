@@ -1,44 +1,48 @@
 import mediapy as media
 import numpy as np
 import cv2
-import open3d as o3d
 
 import sys
+
+from config import Config
+
 sys.path.append('/home/norman/dino-vit-features')
 
 import matplotlib.pyplot as plt
 import torch
 from correspondences import find_correspondences, draw_correspondences
-from extractor import ViTExtractor
+from dino_vit_features.extractor import ViTExtractor
 from PIL import Image
 
-num_pairs = 8 #@param
-load_size = 480 #@param
-layer = 9 #@param
-facet = 'key' #@param
-bin=True #@param
-thresh=0.2 #@param
-model_type='dino_vits8' #@param
-stride = 8 #@param
-patch_size = 8 #not changeable
-device = "cuda"
+config = Config()
 
-extractor = ViTExtractor(model_type, stride, device=device)
 
-def extract_descriptors(image_1_path, image_2_path, num_pairs = num_pairs, load_size = load_size):
+
+extractor = ViTExtractor(config.model_type, config.stride, device=config.device)
+
+def extract_descriptors(image_1_path, image_2_path, num_pairs = config.num_pairs, load_size = config.load_size):
     with torch.no_grad():
-        points1, points2, image1_pil, image2_pil, \
-        patches_xy, desc1, desc2, num_patches = find_correspondences(image_1_path, image_2_path, num_pairs, load_size, layer,
-                                                                       facet, bin, thresh, model_type, stride,
-                                                                       return_patches_x_y = True)
+        points1, points2, image1_pil, image2_pil, patches_xy, desc1, desc2, num_patches = find_correspondences(
+            image_1_path,
+            image_2_path,
+            num_pairs,
+            load_size,
+            config.layer,
+            config.facet,
+            config.bin,
+            config.thresh,
+            config.model_type,
+            config.stride,
+            return_patches_x_y = True
+        )
         desc1 = desc1.reshape((num_patches[0],num_patches[1],6528))
         descriptor_vectors = desc1[patches_xy[0], patches_xy[1]]
-        print("num patches", num_patches)
+        # print("num patches", num_patches)
         return patches_xy, desc1, descriptor_vectors, num_patches
 
 
 
-def extract_desc_maps(image_paths, load_size = load_size):
+def extract_desc_maps(image_paths, load_size = config.load_size):
     if not isinstance(image_paths, list):
         image_paths = [image_paths]
     path = image_paths[0]
@@ -60,8 +64,8 @@ def extract_desc_maps(image_paths, load_size = load_size):
             image_batch, image_pil = extractor.preprocess(image_path, load_size)
             image_batch_transposed = np.transpose(image_batch[0], (1,2,0))
 
-            print("image1_batch.size", image_batch.size())
-            descriptors = extractor.extract_descriptors(image_batch.to(device), layer, facet, bin)
+            # print("image1_batch.size", image_batch.size())
+            descriptors = extractor.extract_descriptors(image_batch.to(config.device), config.layer, config.facet, config.bin)
             patched_shape = extractor.num_patches
             descriptors = descriptors.reshape((patched_shape[0],
                                 patched_shape[1],
@@ -71,8 +75,8 @@ def extract_desc_maps(image_paths, load_size = load_size):
             image_batch_transposed = image_batch_transposed - image_batch_transposed.min()
             image_batch_transposed = image_batch_transposed/image_batch_transposed.max()
             image_batch_transposed = np.array(image_batch_transposed*255, dtype = np.uint8)
-            org_images_list.append(media.resize_image(image_batch_transposed, (image_batch_transposed.shape[0]//patch_size,
-                                                                   image_batch_transposed.shape[1]//patch_size)))
+            org_images_list.append(media.resize_image(image_batch_transposed, (image_batch_transposed.shape[0]//config.patch_size,
+                                                                   image_batch_transposed.shape[1]//config.patch_size)))
     return descriptors_list, org_images_list
 
 
@@ -81,10 +85,10 @@ def extract_descriptor_nn(descriptors, emb_im, patched_shape, return_heatmaps = 
     cs_xs_list = []
     cs_list = []
     cs = torch.nn.CosineSimilarity(dim=-1)
-    print("emb_im shape", emb_im.shape)
+    # print("emb_im shape", emb_im.shape)
     for i in range(len(descriptors)):
-        cs_i = cs(descriptors[i].cuda(), emb_im.cuda())
-        print("cs_i.shape", cs_i.shape)
+        cs_i = cs(descriptors[i], emb_im)
+        # print("cs_i.shape", cs_i.shape)
         cs_i = cs_i.reshape((-1))
         cs_i_y = cs_i.argmax().cpu()//patched_shape[1]
         cs_i_x = cs_i.argmax().cpu()%patched_shape[1]
@@ -188,7 +192,7 @@ def extract_data_for_training(paths, intrinsics_mat, num_pairs = 15, clean = Tru
 
     patches_xy, desc_map, descriptor_vectors, num_patches = extract_descriptors("a.png",
                                                                             "b.png", 
-                                                                            load_size = load_size, 
+                                                                            load_size = config.load_size,
                                                                             num_pairs = num_pairs)
     
     kps, jts = [], []
@@ -198,7 +202,7 @@ def extract_data_for_training(paths, intrinsics_mat, num_pairs = 15, clean = Tru
         video = np.load(f"{path}/rgbs_subsampled_30.npy")
         descriptors_list, org_images_list = extract_desc_maps(video[0])
         key_y, key_x = extract_descriptor_nn(descriptor_vectors, emb_im=descriptors_list[0], patched_shape=num_patches, return_heatmaps = False)
-        points = [(y,x) for y, x in zip(np.array(key_y)*stride, np.array(key_x)*stride)]
+        points = [(y,x) for y, x in zip(np.array(key_y)*config.stride, np.array(key_x)*config.stride)]
         depth = np.load(f"{path}/depths_subsampled_30.npy")[0]
         x3d, y3d, z3d = project_in_3d(points, depth, intrinsics_mat)
 
@@ -242,7 +246,6 @@ def clean_reshape(k):
             new.append([k[i,0,j], k[i,1,j], k[i,2,j]])
         clean_k_reshape.append(new)
     return clean_k_reshape
-
 
 
 def find_transformation(X, Y):

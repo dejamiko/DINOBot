@@ -31,15 +31,15 @@ def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10
     image_path1, and the processed pil image of image_path2.
     """
     # extracting descriptors for each image
-    print("bomboclat")
+    # print("bomboclat")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #if extractor is None:
     extractor = ViTExtractor(model_type, stride, device=device)
     image1_batch, image1_pil = extractor.preprocess(image_path1, load_size)
-    print("image1_batch.size", image1_batch.size())
+    # print("image1_batch.size", image1_batch.size())
     descriptors1 = extractor.extract_descriptors(image1_batch.to(device), layer, facet, bin)
     num_patches1, load_size1 = extractor.num_patches, extractor.load_size
-    print("num_patches1", num_patches1)
+    # print("num_patches1", num_patches1)
     image2_batch, image2_pil = extractor.preprocess(image_path2, load_size)
     descriptors2 = extractor.extract_descriptors(image2_batch.to(device), layer, facet, bin)
     num_patches2, load_size2 = extractor.num_patches, extractor.load_size
@@ -99,8 +99,8 @@ def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10
     img1_indices_to_show = torch.arange(num_patches1[0] * num_patches1[1], device=device)[indices_to_show]
     img2_indices_to_show = nn_1[indices_to_show]
     # coordinates in descriptor map's dimensions
-    print("img1_indices_to_show", img1_indices_to_show)
-    print("img2_indices_to_show", img2_indices_to_show)
+    # print("img1_indices_to_show", img1_indices_to_show)
+    # print("img2_indices_to_show", img2_indices_to_show)
     img1_y_to_show = (img1_indices_to_show / num_patches1[1]).cpu().numpy()
     img1_x_to_show = (img1_indices_to_show % num_patches1[1]).cpu().numpy()
     img2_y_to_show = (img2_indices_to_show / num_patches2[1]).cpu().numpy()

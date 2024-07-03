@@ -217,8 +217,8 @@ class ArmEnv(Environment):
         Get the camera information for the wrist camera.
         :return: the width, height, projection matrix, and view matrix of the camera
         """
-        width = self.config.IMAGE_SIZE
-        height = self.config.IMAGE_SIZE
+        width = self.config.load_size
+        height = self.config.load_size
 
         fov = 60
         aspect = width / height
@@ -520,8 +520,8 @@ class ArmEnv(Environment):
         :return: The points drawn in 3D space
         """
         all_pixels_in_camera_feed = []
-        for x in range(self.config.IMAGE_SIZE):
-            for y in range(self.config.IMAGE_SIZE):
+        for x in range(self.config.load_size):
+            for y in range(self.config.load_size):
                 all_pixels_in_camera_feed.append([x, y])
         reduced_pixels = all_pixels_in_camera_feed[::8]
         points3d = self.project_to_3d(reduced_pixels, depth_buffer)
