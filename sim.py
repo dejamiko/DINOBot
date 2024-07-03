@@ -19,7 +19,7 @@ class ArmEnv(Environment):
     an arm, and some objects that can be placed on the table.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, load=True):
         """
         Initialize the simulation environment.
         """
@@ -28,7 +28,8 @@ class ArmEnv(Environment):
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
-        self.load_object()
+        if load:
+            self.load_object()
 
     def _setup_simulation_basic(self):
         """
@@ -541,7 +542,7 @@ if __name__ == "__main__":
     A sample script to spawn some cubes on a table and move the robot arm towards one of them.
     """
     config = Config()
-    env = ArmEnv(config)
+    env = ArmEnv(config, False)
 
     # env.load_object(x=0.6, y=0.3)
     # pos = env.get_target_position("object")

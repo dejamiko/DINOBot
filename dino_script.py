@@ -6,6 +6,7 @@ You can then run this file inside that repo.
 There are a few setup-dependent functions you need to implement, like getting an RGBD observation from the camera
 or moving the robot, that you will find on top of this file.
 """
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,10 +26,10 @@ from correspondences import find_correspondences, draw_correspondences
 num_pairs = 8
 load_size = 224
 layer = 9
-facet = 'key'
+facet = "key"
 bin = True
 thresh = 0.05
-model_type = 'dino_vits8'
+model_type = "dino_vits8"
 stride = 4
 
 # Deployment hyperparameters
@@ -136,9 +137,18 @@ if __name__ == "__main__":
             with torch.no_grad():
                 # This function from an external library takes image paths as input. Therefore, store the paths of the
                 # observations and then pass those
-                points1, points2, image1_pil, image2_pil = find_correspondences(rgb_bn, rgb_live, num_pairs, load_size,
-                                                                                layer,
-                                                                                facet, bin, thresh, model_type, stride)
+                points1, points2, image1_pil, image2_pil = find_correspondences(
+                    rgb_bn,
+                    rgb_live,
+                    num_pairs,
+                    load_size,
+                    layer,
+                    facet,
+                    bin,
+                    thresh,
+                    model_type,
+                    stride,
+                )
 
             # Given the pixel coordinates of the correspondences, and their depth values,
             # project the points to 3D space.

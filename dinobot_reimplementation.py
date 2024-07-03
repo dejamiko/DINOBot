@@ -12,52 +12,41 @@ import cv2
 import numpy as np
 import requests
 import torch
+from PIL import Image
 
 from config import Config
 from dinobot_utils import extract_descriptors, extract_descriptor_nn, extract_desc_maps
-from dino_vit_features.correspondences import draw_correspondences
 from sim import ArmEnv
 
 
-# def find_correspondences(image_path1, image_path2, url, draw=False):
-#     """
-#     Find correspondences between two images using the DINO-ViT features. This uses the DINO server to extract the
-#     features and find the correspondences between the two images.
-#     :param image_path1: A path to the first image
-#     :param image_path2: A path to the second image
-#     :param url: The url of the DINO server
-#     :param draw: A flag to determine whether to draw the correspondences on the images
-#     :return: The correspondences between the two images, the two images, the images with the correspondences drawn on
-#     them, and the time taken to find the correspondences. If draw is False, the images with the correspondences are not
-#     returned.
-#     """
-#     url += 'correspondences'
-#     with open(image_path1, 'rb') as f:
-#         files = {'image1': f.read()}
-#     with open(image_path2, 'rb') as f:
-#         files['image2'] = f.read()
-#     args = {'draw': draw}
-#     response = requests.post(url, files=files, data=args)
-#     if response.status_code == 200:
-#         parsed_response = response.json()
-#         if draw:
-#             image1_correspondences = Image.fromarray(np.array(parsed_response["image1_correspondences"], dtype='uint8'))
-#             image2_correspondences = Image.fromarray(np.array(parsed_response["image2_correspondences"], dtype='uint8'))
-#             return (
-#                 parsed_response["points1"],
-#                 parsed_response["points2"],
-#                 image1_correspondences,
-#                 image2_correspondences,
-#                 parsed_response["time_taken"]
-#             )
-#         else:
-#             return (
-#                 parsed_response["points1"],
-#                 parsed_response["points2"],
-#                 parsed_response["time_taken"]
-#             )
-#     else:
-#         print(response.json())
+def find_correspondeces_fast(rgb_bn_path, rgb_live_path, num_patches=None, descriptor_vectors=None, points1_2d=None):
+    start_time = time.time()
+    if num_patches is None or descriptor_vectors is None or points1_2d is None:
+        _, _, descriptor_vectors, num_patches = extract_descriptors(
+            rgb_bn_path, rgb_live_path
+        )
+        descriptor_list, _ = extract_desc_maps([rgb_bn_path])
+        key_y, key_x = extract_descriptor_nn(
+            descriptor_vectors, descriptor_list[0], num_patches
+        )
+        points1_2d = [
+            (y, x)
+            for y, x in zip(
+                np.array(key_y) * config.stride, np.array(key_x) * config.stride
+            )
+        ]
+
+    descriptor_list, _ = extract_desc_maps([rgb_live_path])
+    key_y, key_x = extract_descriptor_nn(
+        descriptor_vectors, descriptor_list[0], num_patches
+    )
+    points2_2d = [
+        (y, x)
+        for y, x in zip(
+            np.array(key_y) * config.stride, np.array(key_x) * config.stride
+        )
+    ]
+    return points1_2d, points2_2d, time.time() - start_time, num_patches, descriptor_vectors
 
 
 def find_transformation(X, Y):
@@ -87,50 +76,6 @@ def find_transformation(X, Y):
 
     # Determine translation vector
     t = cY - np.dot(R, cX)
-    return R, t
-
-
-def rigid_transform_3D(A, B):
-    assert A.shape == B.shape
-
-    num_rows, num_cols = A.shape
-    if num_rows != 3:
-        raise Exception(f"matrix A is not 3xN, it is {num_rows}x{num_cols}")
-
-    num_rows, num_cols = B.shape
-    if num_rows != 3:
-        raise Exception(f"matrix B is not 3xN, it is {num_rows}x{num_cols}")
-
-    # find mean column wise
-    centroid_A = np.mean(A, axis=1)
-    centroid_B = np.mean(B, axis=1)
-
-    # ensure centroids are 3x1
-    centroid_A = centroid_A.reshape(-1, 1)
-    centroid_B = centroid_B.reshape(-1, 1)
-
-    # subtract mean
-    Am = A - centroid_A
-    Bm = B - centroid_B
-
-    H = Am @ np.transpose(Bm)
-
-    # sanity check
-    # if linalg.matrix_rank(H) < 3:
-    #    raise ValueError("rank of H = {}, expecting 3".format(linalg.matrix_rank(H)))
-
-    # find rotation
-    U, S, Vt = np.linalg.svd(H)
-    R = Vt.T @ U.T
-
-    # special reflection case
-    if np.linalg.det(R) < 0:
-        print("det(R) < R, reflection detected!, correcting for it ...")
-        Vt[2, :] *= -1
-        R = Vt.T @ U.T
-
-    t = -R @ centroid_A + centroid_B
-
     return R, t
 
 
@@ -203,35 +148,21 @@ def deploy_dinobot(env, data, config):
         rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        start_time = time.time()
         if counter % 10 == 0:
-            # print("Extracting descriptors for the bottleneck image")
-            patches_xy, desc1, descriptor_vectors, num_patches = extract_descriptors(rgb_bn_path, rgb_live_path)
-            descriptor_list, org_images_list = extract_desc_maps([rgb_bn_path])
-            key_y, key_x = extract_descriptor_nn(descriptor_vectors, descriptor_list[0], num_patches)
-            points1_2d = [(y, x) for y, x in zip(np.array(key_y) * config.stride, np.array(key_x) * config.stride)]
-
-        # print("Extracting descriptors for the live image")
-        descriptor_list, org_images_list = extract_desc_maps([rgb_live_path])
-        key_y, key_x = extract_descriptor_nn(descriptor_vectors, descriptor_list[0], num_patches)
-        points2_2d = [(y, x) for y, x in zip(np.array(key_y) * config.stride, np.array(key_x) * config.stride)]
-
-        # fig1, fig2 = draw_correspondences(points1_2d, points2_2d, rgb_bn, rgb_live)
-
-        # print(f"Points1: {points1_2d}, Points2: {points2_2d}")
-
-        # save the images
-        # img1_c.save('images/image1.png')
-        # img2_c.save('images/image2.png')
+            points1_2d, points2_2d, time_taken, num_patches, descriptor_vectors = find_correspondeces_fast(
+                rgb_bn_path, rgb_live_path
+            )
+        else:
+            points1_2d, points2_2d, time_taken, num_patches, descriptor_vectors = find_correspondeces_fast(
+                rgb_bn_path, rgb_live_path, num_patches, descriptor_vectors, points1_2d
+            )
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
         points1 = env.project_to_3d(points1_2d, depth_bn)
         points2 = env.project_to_3d(points2_2d, depth_live)
 
         error = compute_error(points1, points2)
-        print(f"Error: {error}, time taken: {time.time() - start_time}")
-
-        # print(f"Points1: {points1}, Points2: {points2}")
+        print(f"Error: {error}, time taken: {time_taken}")
 
         if error < config.ERR_THRESHOLD:
             break
@@ -239,16 +170,8 @@ def deploy_dinobot(env, data, config):
         # Find rigid translation and rotation that aligns the points by minimising error, using SVD.
         R, t = find_transformation(points1, points2)
 
-        # try using the other method
-        points1_t = np.transpose(points1)
-        points2_t = np.transpose(points2)
-        R_2, t_2 = rigid_transform_3D(points1_t, points2_t)
-
-        # print(f"R: {R}, t: {t}, R_2: {R_2}, t_2: {t_2}")
-
         # Move robot
         env.move_in_camera_frame(t, R)
-
         counter += 1
 
     # Once error is small enough, replay demo.
@@ -304,8 +227,6 @@ if __name__ == "__main__":
     clear_images(config)
 
     # RECORD DEMO:
-    np.random.seed(0)
-    torch.manual_seed(0)
     env = ArmEnv(config)
     data = env.record_demo()
 
