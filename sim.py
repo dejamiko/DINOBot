@@ -2,6 +2,7 @@
 This file contains the code related to the simulation environment. It can be used within the DINOBot framework
 or for small independent experiments with the pybullet simulation environment.
 """
+import time
 
 import cv2
 import numpy as np
@@ -39,15 +40,18 @@ class ArmEnv(Environment):
         p.setGravity(0, 0, -10)
         p.setRealTimeSimulation(0)
 
-        p.loadURDF("plane.urdf", globalScaling=100)
+        p.loadURDF("plane.urdf")
 
         self.objects["arm"] = p.loadURDF(
-            "franka_panda/panda.urdf", [1, 1, 0], useFixedBase=True
+            "franka_panda/panda.urdf",
+            [0, 0, 1.2],
+            # baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi / 4]),
+            useFixedBase=True
         )
 
-        # self.objects["table"] = p.loadURDF(
-        #     "table/table.urdf", [1.7, 1, 0], useFixedBase=True
-        # )
+        self.objects["table"] = p.loadURDF(
+            "table/table.urdf", [0, 0, 0], useFixedBase=False, globalScaling=2
+        )
 
         focus_position, _ = p.getBasePositionAndOrientation(self.objects["arm"])
         p.resetDebugVisualizerCamera(
@@ -57,19 +61,34 @@ class ArmEnv(Environment):
             cameraTargetPosition=focus_position,
         )
 
-    def load_object(self, x=None, y=None, object_path="jenga/jenga.urdf"):
+    def move_arm_to_home_position(self):
+        """
+        Move the arm to the home position.
+        """
+        home_position = [0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0]
+        p.setJointMotorControlArray(
+            self.objects["arm"],
+            range(9),
+            p.POSITION_CONTROL,
+            targetPositions=home_position,
+        )
+        for i in range(100):
+            p.stepSimulation()
+            time.sleep(1.0 / 240.0)
+
+    def load_object(self, object_path="jenga/jenga.urdf"):
         """
         Load an object on the table and move the arm so the camera can see it.
-        :param x: the x-coordinate of the object. If None, a random x-coordinate is chosen.
-        :param y: the y-coordinate of the object. If None, a random y-coordinate is chosen.
         :param object_path: the path to the object URDF file
         """
         # load some object on the table somewhere random (within a certain range)
-        pos_x = x if x is not None else np.random.uniform(1.6, 1.8)
-        pos_y = y if y is not None else np.random.uniform(0.9, 1.1)
+        x_base = 0.4
+        y_base = 0.0
+        pos_x = np.random.uniform(-0.1, 0.1) + x_base
+        pos_y = np.random.uniform(-0.1, 0.1) + y_base
         angle = np.random.uniform(0, 2 * np.pi)
         self.objects[f"object"] = p.loadURDF(
-            object_path, [pos_x, pos_y, 0.5], p.getQuaternionFromEuler([0, 0, angle])
+            object_path, [pos_x, pos_y, 1.2], p.getQuaternionFromEuler([0, 0, angle])
         )
         colour = np.random.uniform(0, 1, 3)
         p.changeVisualShape(
@@ -77,14 +96,12 @@ class ArmEnv(Environment):
         )
 
         # let the object drop
-        for i in range(100):
+        for i in range(50):
             p.stepSimulation()
 
         # move the arm a little bit so the camera can see the object
-        if x is not None and y is not None:
-            pos = [x, y, 0.5]
-        else:
-            pos = [1.7, 1, 0.5]
+        eef_pos, _ = p.getLinkState(self.objects["arm"], 11)[:2]
+        pos = [x_base, y_base, eef_pos[2]]
         while not self.is_target_reached(pos):
             self.step_to_target(pos)
 
@@ -588,20 +605,7 @@ if __name__ == "__main__":
     # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
     # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
     # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
-    env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
-    env.move_in_camera_frame(
-        np.array([-0.3, 0, 0]),
-        np.array(
-            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))
-        ).reshape(3, 3),
-    )
-    env.move_in_camera_frame(
-        np.array([0.3, 0, 0]),
-        np.array(
-            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))
-        ).reshape(3, 3),
-    )
+
 
     # demo = env.record_demo()
     #
