@@ -45,6 +45,10 @@ class ArmEnv(Environment):
             "franka_panda/panda.urdf", [1, 1, 0], useFixedBase=True
         )
 
+        # self.objects["table"] = p.loadURDF(
+        #     "table/table.urdf", [1.7, 1, 0], useFixedBase=True
+        # )
+
         focus_position, _ = p.getBasePositionAndOrientation(self.objects["arm"])
         p.resetDebugVisualizerCamera(
             cameraDistance=3,
@@ -218,8 +222,8 @@ class ArmEnv(Environment):
         Get the camera information for the wrist camera.
         :return: the width, height, projection matrix, and view matrix of the camera
         """
-        width = self.config.load_size
-        height = self.config.load_size
+        width = self.config.LOAD_SIZE
+        height = self.config.LOAD_SIZE
 
         fov = 60
         aspect = width / height
@@ -521,8 +525,8 @@ class ArmEnv(Environment):
         :return: The points drawn in 3D space
         """
         all_pixels_in_camera_feed = []
-        for x in range(self.config.load_size):
-            for y in range(self.config.load_size):
+        for x in range(self.config.LOAD_SIZE):
+            for y in range(self.config.LOAD_SIZE):
                 all_pixels_in_camera_feed.append([x, y])
         reduced_pixels = all_pixels_in_camera_feed[::8]
         points3d = self.project_to_3d(reduced_pixels, depth_buffer)

@@ -204,7 +204,7 @@ def deploy_dinobot(env, data, config):
         rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        if config.draw_correspondences:
+        if config.DRAW_CORRESPONDENCES:
             if config.USE_FAST_CORRESPONDENCES:
                 if counter % config.RECOMPUTE_EVERY == 0:
                     (
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
-    config.draw_correspondences = True
+    config.DRAW_CORRESPONDENCES = True
     # Remove all images from the working directory
     clear_images(config)
 
