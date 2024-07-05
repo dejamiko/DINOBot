@@ -40,8 +40,8 @@ def test_load_object(env):
 
 if __name__ == "__main__":
     config = Config()
-    config.VERBOSITY = 0
-    environment = ArmEnv(config, False)
+    config.VERBOSITY = 1
+    environment = ArmEnv(config)
 
-    # test_move_and_rotate(environment)
+    test_move_and_rotate(environment)
     test_load_object(environment)

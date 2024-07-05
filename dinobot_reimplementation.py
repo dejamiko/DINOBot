@@ -363,10 +363,12 @@ if __name__ == "__main__":
 
     # RECORD DEMO:
     env = ArmEnv(config)
+    env.load_object()
     data = env.record_demo()
 
     # TEST TIME DEPLOYMENT
     # Move/change the object and move the end-effector to the home (or a random) pose.
     env.reset()
+    env.load_object()
     # load a new object
     deploy_dinobot(env, data, config)

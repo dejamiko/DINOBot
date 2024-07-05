@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class Config:
     # DINOBot deployment constants
     ERR_THRESHOLD = 0.04
@@ -23,6 +26,21 @@ class Config:
 
     # Simulation constants
     VERBOSITY = 1
+    GRAVITY = -9.81
+    ARM_BASE_POSITION = (0, 0, 1.2)
+    TABLE_BASE_POSITION = (0, 0, 0)
+    # move this more to the front of the robot
+    ARM_HOME_POSITION = (0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0)
+    OBJECT_X_Y_Z_BASE = (0.4, 0.0, 1.3)
+    DEBUG_CAMERA_VIEW = (3, 45, -40)
+    MOVE_TO_TARGET_ERROR_THRESHOLD = 0.01
+    CAMERA_FOV = 60
+    CAMERA_NEAR_PLANE = 0.01
+    CAMERA_FAR_PLANE = 100
+    CAMERA_INIT_VECTOR = (0, 0, 1)
+    CAMERA_INIT_UP = (0, 1, 0)
+    CAMERA_TO_EEF_TRANSLATION = (0, 0, 0.05)
+    CAMERA_TO_EEF_ROTATION = (0, 0, -np.pi / 2)
 
     def get_dino_config(self):
         return {

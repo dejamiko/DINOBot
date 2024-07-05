@@ -2,8 +2,6 @@
 This file contains the code related to the simulation environment. It can be used within the DINOBot framework
 or for small independent experiments with the pybullet simulation environment.
 """
-import time
-
 import cv2
 import numpy as np
 import pybullet as p
@@ -20,7 +18,7 @@ class ArmEnv(Environment):
     an arm, and some objects that can be placed on the table.
     """
 
-    def __init__(self, config, load=True):
+    def __init__(self, config):
         """
         Initialize the simulation environment.
         """
@@ -29,35 +27,34 @@ class ArmEnv(Environment):
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
-        if load:
-            self.load_object()
+        self.move_arm_to_home_position()
 
     def _setup_simulation_basic(self):
         """
         Set up the simulation environment with a table and an arm.
         """
         p.resetSimulation()
-        p.setGravity(0, 0, -10)
+        p.setGravity(0, 0, self.config.GRAVITY)
         p.setRealTimeSimulation(0)
 
         p.loadURDF("plane.urdf")
 
         self.objects["arm"] = p.loadURDF(
             "franka_panda/panda.urdf",
-            [0, 0, 1.2],
-            # baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi / 4]),
+            self.config.ARM_BASE_POSITION,
             useFixedBase=True
         )
 
+        # TODO remove the table texture
         self.objects["table"] = p.loadURDF(
-            "table/table.urdf", [0, 0, 0], useFixedBase=False, globalScaling=2
+            "table/table.urdf", self.config.TABLE_BASE_POSITION, useFixedBase=False, globalScaling=2
         )
 
         focus_position, _ = p.getBasePositionAndOrientation(self.objects["arm"])
         p.resetDebugVisualizerCamera(
-            cameraDistance=3,
-            cameraYaw=0,
-            cameraPitch=-40,
+            cameraDistance=self.config.DEBUG_CAMERA_VIEW[0],
+            cameraYaw=self.config.DEBUG_CAMERA_VIEW[1],
+            cameraPitch=self.config.DEBUG_CAMERA_VIEW[2],
             cameraTargetPosition=focus_position,
         )
 
@@ -65,16 +62,8 @@ class ArmEnv(Environment):
         """
         Move the arm to the home position.
         """
-        home_position = [0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0]
-        p.setJointMotorControlArray(
-            self.objects["arm"],
-            range(9),
-            p.POSITION_CONTROL,
-            targetPositions=home_position,
-        )
-        for i in range(100):
-            p.stepSimulation()
-            time.sleep(1.0 / 240.0)
+        home_position = self.config.ARM_HOME_POSITION
+        self.move_to_target_joint_position(home_position)
 
     def load_object(self, object_path="jenga/jenga.urdf"):
         """
@@ -82,13 +71,12 @@ class ArmEnv(Environment):
         :param object_path: the path to the object URDF file
         """
         # load some object on the table somewhere random (within a certain range)
-        x_base = 0.4
-        y_base = 0.0
+        x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
         pos_x = np.random.uniform(-0.1, 0.1) + x_base
         pos_y = np.random.uniform(-0.1, 0.1) + y_base
         angle = np.random.uniform(0, 2 * np.pi)
         self.objects[f"object"] = p.loadURDF(
-            object_path, [pos_x, pos_y, 1.2], p.getQuaternionFromEuler([0, 0, angle])
+            object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle])
         )
         colour = np.random.uniform(0, 1, 3)
         p.changeVisualShape(
@@ -102,18 +90,9 @@ class ArmEnv(Environment):
         # move the arm a little bit so the camera can see the object
         eef_pos, _ = p.getLinkState(self.objects["arm"], 11)[:2]
         pos = [x_base, y_base, eef_pos[2]]
-        while not self.is_target_reached(pos):
-            self.step_to_target(pos)
+        self.move_to_target_position_and_orientation(pos)
 
-    def get_target_position(self, name="object"):
-        """
-        Get the position of the target object.
-        :param name: The name of the object
-        :return: the position of the object
-        """
-        return p.getBasePositionAndOrientation(self.objects[name])[0]
-
-    def move_to_target(self, target_position, target_orientation=None):
+    def move_to_target_position_and_orientation(self, target_position, target_orientation=None):
         """
         Move the arm to the target position.
         :param target_position: the position of the target in the world frame
@@ -153,29 +132,36 @@ class ArmEnv(Environment):
                 restPoses=rest_poses,
             )
 
+        self.move_to_target_joint_position(target_joint_positions)
+
+    def move_to_target_joint_position(self, target_joint_positions):
+        """
+        Move the arm to the target joint positions.
+        :param target_joint_positions: the target joint positions
+        """
         p.setJointMotorControlArray(
             self.objects["arm"],
             range(9),
             p.POSITION_CONTROL,
             targetPositions=target_joint_positions,
         )
-
-        error, steps = np.inf, 0
+        target_joint_positions = np.array(target_joint_positions)
         if self.config.VERBOSITY > 0:
             points_debug_3d = -1
-        while error > 0.01 and steps < 100:
-            current_pos, current_rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        error = np.inf
+        while error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD:
+            current_joint_positions = np.array([
+                p.getJointState(self.objects["arm"], i)[0] for i in range(9)
+            ])
             error = np.linalg.norm(
-                np.array(target_position) - np.array(current_pos)
-            ) + np.linalg.norm(np.array(target_orientation) - np.array(current_rot))
-
+                current_joint_positions - target_joint_positions
+            )
             p.stepSimulation()
             live_img, depth_buffer = self.get_rgbd_image()
             if self.config.VERBOSITY > 0:
                 points_debug_3d = self.draw_points_in_3d(
                     live_img, depth_buffer, points_debug_3d
                 )
-            steps += 1
         if self.config.VERBOSITY > 0:
             p.removeUserDebugItem(points_debug_3d)
 
@@ -242,16 +228,16 @@ class ArmEnv(Environment):
         width = self.config.LOAD_SIZE
         height = self.config.LOAD_SIZE
 
-        fov = 60
+        fov = self.config.CAMERA_FOV
         aspect = width / height
-        near = 0.01
-        far = 100
+        near = self.config.CAMERA_NEAR_PLANE
+        far = self.config.CAMERA_FAR_PLANE
         projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
         # find the camera position to be at the wrist of the robot
         camera_position, rot_matrix = self.get_camera_position_and_rotation()
-        init_camera_vector = (0, 0, 1)
-        init_up_vector = (0, 1, 0)
+        init_camera_vector = self.config.CAMERA_INIT_VECTOR
+        init_up_vector = self.config.CAMERA_INIT_UP
         camera_vector = rot_matrix.dot(init_camera_vector)
         up_vector = rot_matrix.dot(init_up_vector)
         view_matrix = p.computeViewMatrix(
@@ -309,7 +295,7 @@ class ArmEnv(Environment):
 
         return camera_position, camera_rotation
 
-    def move(self, t, R):
+    def move_in_world_frame(self, t, R):
         """
         Inputs: t_meters: (x,y,z) translation in end-effector frame
                 R: (3x3) array - rotation matrix in end-effector frame
@@ -351,7 +337,7 @@ class ArmEnv(Environment):
             )
             p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
         # move the robot
-        self.move_to_target(desired_pos, desired_rot)
+        self.move_to_target_position_and_orientation(desired_pos, desired_rot)
         if self.config.VERBOSITY > 0:
             p.removeBody(red_dot_id)
 
@@ -379,7 +365,7 @@ class ArmEnv(Environment):
         """
         bn_image, bn_depth = self.get_rgbd_image()
         velocities = []
-        target_pos = self.get_target_position()
+        target_pos = p.getBasePositionAndOrientation(self.objects["object"])[0]
 
         while not self.is_target_reached(target_pos):
             self.step_to_target(target_pos)
@@ -420,7 +406,7 @@ class ArmEnv(Environment):
         Reset the simulation environment.
         """
         self._setup_simulation_basic()
-        self.load_object()
+        self.move_arm_to_home_position()
 
     def project_to_3d(self, points, depth):
         """
@@ -448,14 +434,13 @@ class ArmEnv(Environment):
         projected_points = np.array(projected_points)
         return projected_points
 
-    @staticmethod
-    def get_eef_to_camera_transform():
+    def get_eef_to_camera_transform(self):
         """
         Get the transformation matrix from camera frame to end-effector frame.
         """
-        camera_to_eef_position = np.array([0, 0, 0.05])
+        camera_to_eef_position = np.array(self.config.CAMERA_TO_EEF_TRANSLATION)
         camera_to_eef_orientation = np.array(
-            p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler(self.config.CAMERA_TO_EEF_ROTATION))
         ).reshape(3, 3)
         return camera_to_eef_position, camera_to_eef_orientation
 
@@ -563,74 +548,4 @@ if __name__ == "__main__":
     A sample script to spawn some cubes on a table and move the robot arm towards one of them.
     """
     config = Config()
-    env = ArmEnv(config, False)
-
-    # env.load_object(x=0.6, y=0.3)
-    # pos = env.get_target_position("object")
-    # env.move_to_target(pos)
-
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, 0]))).reshape(3, 3))
-    # env.move_in_camera_frame(np.array([0, 0.3, 0]), np.eye(3))
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    #
-    # env.move_to_target(np.array([1, 1, 0.821]), np.eye(3))
-    #
-    # env.move(np.array([0.3, 0, 0]), np.eye(3))
-    # env.move(np.array([0, 0.3, 0]), np.eye(3))
-    # env.move(np.array([-0.3, 0, 0]), np.eye(3))
-    # env.move(np.array([0, -0.3, 0]), np.eye(3))
-    # env.move(np.array([0.3, 0, 0]), np.eye(3))
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-    # env.move(np.array([-0.3, 0, 0]), np.eye(3))
-
-    # env.move(np.array([0.25, 0, 0]), np.eye(3))
-    # env.move(np.array([0, 0.25, 0]), np.eye(3))
-    # env.move(np.array([-0.25, 0, 0]), np.eye(3))
-    # env.move(np.array([0, -0.25, 0]), np.eye(3))
-    # env.move(np.array([0, 0, 0]),
-    #          np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
-    # env.move(np.array([0, 0.25, 0]), np.eye(3))
-
-    # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
-    # env.move_in_camera_frame(np.array([0, 0.3, 0]), np.eye(3))
-    # env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
-    # env.move_in_camera_frame(np.array([0, -0.3, 0]), np.eye(3))
-    # env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
-    # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, np.pi / 2]))).reshape(3, 3))
-    # env.move_in_camera_frame(np.array([0, 0, 0]), np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler([0, 0, -np.pi / 2]))).reshape(3, 3))
-
-
-    # demo = env.record_demo()
-    #
-    # env.reset()
-    # env.load_object(x=0.6, y=-0.3)
-    #
-    # env.replay_demo(demo)
-
-    # target_ind = env.get_random_cube_index()
-    # target_pos = env.get_target_position("cube" + str(target_ind))
-    # print(f"Target index: {target_ind}")
-    # print(f"Target position: {target_pos}")
-    #
-    # # let the cubes drop
-    # for step in range(100):
-    #     p.stepSimulation()
-    #
-    # # start moving the arm
-    # for step in range(300):
-    #     target_pos = env.get_target_position("cube" + str(target_ind))
-    #     if step % 10 == 0:
-    #         print(f"Target position: {target_pos}")
-    #     env.step_to_target(target_pos)
-    #     env.take_picture(None)
-    #     # if the end effector is close to target, stop
-    #     if env.is_target_reached(target_pos):
-    #         print("Target reached!")
-    #         break
+    env = ArmEnv(config)
