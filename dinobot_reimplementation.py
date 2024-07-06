@@ -358,6 +358,7 @@ if __name__ == "__main__":
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
+    config.RANDOM_OBJECT_POSITION = True
     # Remove all images from the working directory
     clear_images(config)
 

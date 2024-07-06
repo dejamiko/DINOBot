@@ -20,11 +20,3 @@ class Environment(ABC):
     @abstractmethod
     def move_in_camera_frame(self, t, R):
         pass
-
-    @abstractmethod
-    def record_demo(self):
-        pass
-
-    @abstractmethod
-    def replay_demo(self, demo_velocities):
-        pass

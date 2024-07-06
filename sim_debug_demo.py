@@ -38,7 +38,7 @@ class DemoSim(ArmEnv):
         """
         p.setJointMotorControlArray(
             self.objects["arm"],
-            [i for i in range(9)],
+            list(range(p.getNumJoints(self.objects["arm"]))),
             p.POSITION_CONTROL,
             targetPositions=self.config.ARM_HOME_POSITION
         )
@@ -112,7 +112,7 @@ class DemoSim(ArmEnv):
                 )
                 link_positions.append(offset)
 
-        # Create the multibody with the central sphere as the base and additional spheres as links
+        # Create the multi body with the central sphere as the base and additional spheres as links
         self.objects["orange_dot"] = p.createMultiBody(
             baseVisualShapeIndex=orange_dot,
             baseInertialFramePosition=desired_pos,
@@ -123,18 +123,17 @@ class DemoSim(ArmEnv):
             linkVisualShapeIndices=additional_balls,
             linkPositions=link_positions,
             linkOrientations=[(0, 0, 0, 1)] * len(additional_balls),  # No orientation needed for the links
-            linkInertialFramePositions=[(0, 0, 0)] * len(additional_balls),  # Assuming the links are massless
-            linkInertialFrameOrientations=[(0, 0, 0, 1)] * len(additional_balls),  # No orientation needed for the links
+            linkInertialFramePositions=[(0, 0, 0)] * len(additional_balls),
+            linkInertialFrameOrientations=[(0, 0, 0, 1)] * len(additional_balls),
             linkParentIndices=[0] * len(additional_balls),  # All links are children of the base
             linkJointTypes=[p.JOINT_FIXED] * len(additional_balls),  # Fixed joints to keep the shape rigid
-            linkJointAxis=[(0, 0, 0)] * len(additional_balls)  # No rotation axis needed for fixed joints
+            linkJointAxis=[(0, 0, 0)] * len(additional_balls)  # No axis needed for fixed joints
         )
 
     def update_parameters(self):
         """
         Update the user provided debug parameters of the simulation.
         """
-        # TODO add keyboard control
         try:
             if p.readUserDebugParameter(self.debug_parameters["home_button"]["id"]) == 1:
                 self.fast_move_to_home()
@@ -188,6 +187,12 @@ class DemoSim(ArmEnv):
             self.fast_move(position, rotation)
 
     def move_target_balls(self, position, rotation):
+        """
+        Move the target balls to a specific position and orientation.
+        :param position: The position to move to.
+        :param rotation: The orientation to move to.
+        :return: The target balls moved to the specified position and orientation.
+        """
         p.resetBasePositionAndOrientation(
             self.objects["orange_dot"],
             position,

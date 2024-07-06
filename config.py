@@ -30,7 +30,7 @@ class Config:
     ARM_BASE_POSITION = (0, 0, 1.2)
     TABLE_BASE_POSITION = (0, 0, 0)
     # move this more to the front of the robot
-    ARM_HOME_POSITION = (0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0)
+    ARM_HOME_POSITION = (0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0, 0, 0, 0)
     OBJECT_X_Y_Z_BASE = (0.4, 0.0, 1.3)
     DEBUG_CAMERA_VIEW = (3, 45, -40)
     MOVE_TO_TARGET_ERROR_THRESHOLD = 0.01
@@ -41,6 +41,8 @@ class Config:
     CAMERA_INIT_UP = (0, 1, 0)
     CAMERA_TO_EEF_TRANSLATION = (0, 0, 0.05)
     CAMERA_TO_EEF_ROTATION = (0, 0, -np.pi / 2)
+    TAKE_IMAGE_AT_EVERY_STEP = False
+    RANDOM_OBJECT_POSITION = False
 
     def get_dino_config(self):
         return {

@@ -2,6 +2,8 @@
 This file contains the code related to the simulation environment. It can be used within the DINOBot framework
 or for small independent experiments with the pybullet simulation environment.
 """
+import time
+
 import cv2
 import numpy as np
 import pybullet as p
@@ -45,18 +47,31 @@ class ArmEnv(Environment):
             useFixedBase=True
         )
 
-        # TODO remove the table texture
+        # use a table with no texture to make it easier for DINOBot to detect the objects
         self.objects["table"] = p.loadURDF(
-            "table/table.urdf", self.config.TABLE_BASE_POSITION, useFixedBase=False, globalScaling=2
+            "/additional_urdfs/table/table.urdf", self.config.TABLE_BASE_POSITION,
+            useFixedBase=False, globalScaling=2
         )
 
-        focus_position, _ = p.getBasePositionAndOrientation(self.objects["arm"])
+        focus_position = p.getLinkState(self.objects["arm"], 11)[0]
         p.resetDebugVisualizerCamera(
             cameraDistance=self.config.DEBUG_CAMERA_VIEW[0],
             cameraYaw=self.config.DEBUG_CAMERA_VIEW[1],
             cameraPitch=self.config.DEBUG_CAMERA_VIEW[2],
             cameraTargetPosition=focus_position,
         )
+
+        self.lower_limits = []
+        self.upper_limits = []
+        self.joint_ranges = []
+        self.rest_poses = []
+        for i in range(p.getNumJoints(self.objects["arm"])):
+            joint_info = p.getJointInfo(self.objects["arm"], i)
+            if joint_info[2] != p.JOINT_FIXED:
+                self.lower_limits.append(joint_info[8])
+                self.upper_limits.append(joint_info[9])
+                self.joint_ranges.append(self.upper_limits[-1] - self.lower_limits[-1])
+                self.rest_poses.append(joint_info[8] + joint_info[9] / 2)
 
     def move_arm_to_home_position(self):
         """
@@ -72,9 +87,9 @@ class ArmEnv(Environment):
         """
         # load some object on the table somewhere random (within a certain range)
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
-        pos_x = np.random.uniform(-0.1, 0.1) + x_base
-        pos_y = np.random.uniform(-0.1, 0.1) + y_base
-        angle = np.random.uniform(0, 2 * np.pi)
+        pos_x = np.random.uniform(-0.1, 0.1) + x_base if self.config.RANDOM_OBJECT_POSITION else x_base
+        pos_y = np.random.uniform(-0.1, 0.1) + y_base if self.config.RANDOM_OBJECT_POSITION else y_base
+        angle = np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_POSITION else 0
         self.objects[f"object"] = p.loadURDF(
             object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle])
         )
@@ -98,39 +113,30 @@ class ArmEnv(Environment):
         :param target_position: the position of the target in the world frame
         :param target_orientation: the orientation of the target in the world frame
         """
-        lower_limits = []
-        upper_limits = []
-        joint_ranges = []
-        rest_poses = []
-        for i in range(p.getNumJoints(self.objects["arm"])):
-            joint_info = p.getJointInfo(self.objects["arm"], i)
-            if joint_info[2] != p.JOINT_FIXED:
-                lower_limits.append(joint_info[8])
-                upper_limits.append(joint_info[9])
-                joint_ranges.append(upper_limits[-1] - lower_limits[-1])
-                rest_poses.append(joint_info[8] + joint_info[9] / 2)
-
         if target_orientation is not None:
             target_joint_positions = p.calculateInverseKinematics(
                 self.objects["arm"],
                 11,
                 target_position,
                 target_orientation,
-                lowerLimits=lower_limits,
-                upperLimits=upper_limits,
-                jointRanges=joint_ranges,
-                restPoses=rest_poses,
+                lowerLimits=self.lower_limits,
+                upperLimits=self.upper_limits,
+                jointRanges=self.joint_ranges,
+                restPoses=self.rest_poses,
             )
         else:
             target_joint_positions = p.calculateInverseKinematics(
                 self.objects["arm"],
                 11,
                 target_position,
-                lowerLimits=lower_limits,
-                upperLimits=upper_limits,
-                jointRanges=joint_ranges,
-                restPoses=rest_poses,
+                lowerLimits=self.lower_limits,
+                upperLimits=self.upper_limits,
+                jointRanges=self.joint_ranges,
+                restPoses=self.rest_poses,
             )
+
+        if len(target_joint_positions) != p.getNumJoints(self.objects["arm"]):
+            target_joint_positions += tuple([0] * (p.getNumJoints(self.objects["arm"]) - len(target_joint_positions)))
 
         self.move_to_target_joint_position(target_joint_positions)
 
@@ -141,53 +147,30 @@ class ArmEnv(Environment):
         """
         p.setJointMotorControlArray(
             self.objects["arm"],
-            range(9),
+            list(range(p.getNumJoints(self.objects["arm"]))),
             p.POSITION_CONTROL,
             targetPositions=target_joint_positions,
         )
         target_joint_positions = np.array(target_joint_positions)
-        if self.config.VERBOSITY > 0:
-            points_debug_3d = -1
         error = np.inf
         while error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD:
             current_joint_positions = np.array([
-                p.getJointState(self.objects["arm"], i)[0] for i in range(9)
+                p.getJointState(self.objects["arm"], i)[0] for i in range(p.getNumJoints(self.objects["arm"]))
             ])
             error = np.linalg.norm(
                 current_joint_positions - target_joint_positions
             )
             p.stepSimulation()
-            live_img, depth_buffer = self.get_rgbd_image()
-            if self.config.VERBOSITY > 0:
-                points_debug_3d = self.draw_points_in_3d(
-                    live_img, depth_buffer, points_debug_3d
-                )
+            if self.config.TAKE_IMAGE_AT_EVERY_STEP:
+                live_img, depth_buffer = self.get_rgbd_image()
+                if self.config.VERBOSITY > 0:
+                    self.draw_points_in_3d(live_img, depth_buffer)
+            else:
+                time.sleep(1. / 2400.)
         if self.config.VERBOSITY > 0:
-            p.removeUserDebugItem(points_debug_3d)
-
-    def step_to_target(self, target_position, target_orientation=None):
-        """
-        Move the arm to the target position by performing one step.
-        :param target_orientation: the orientation of the target
-        :param target_position: the position of the target
-        """
-        if target_orientation is not None:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"], 11, target_position, target_orientation
-            )
-        else:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"], 11, target_position
-            )
-
-        p.setJointMotorControlArray(
-            self.objects["arm"],
-            range(9),
-            p.POSITION_CONTROL,
-            targetPositions=target_joint_positions,
-        )
-        p.stepSimulation()
-        self.get_rgbd_image()
+            if "points_debug_3d" in self.objects:
+                p.removeUserDebugItem(self.objects["points_debug_3d"])
+                self.objects.pop("points_debug_3d")
 
     def get_rgbd_image(self):
         """
@@ -203,22 +186,6 @@ class ArmEnv(Environment):
         depth_buffer = np.array(depth_buffer).reshape(height, width).astype(np.float32)
 
         return rgb_image, depth_buffer
-
-    def is_target_reached(self, target_position, target_orientation=None):
-        """
-        Check if the end-effector is close to the target position.
-        :param target_orientation: The orientation of the target
-        :param target_position: the position of the target
-        :return: True if the end-effector is close to the target position, False otherwise
-        """
-        gripper_pos, gripper_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
-        if target_orientation is None:
-            target_orientation = gripper_orientation
-        if len(target_orientation) != 4:
-            target_orientation = Rotation.from_matrix(target_orientation).as_quat()
-        return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(
-            target_orientation, gripper_orientation, atol=0.05
-        )
 
     def get_camera_info(self):
         """
@@ -312,7 +279,7 @@ class ArmEnv(Environment):
         desired_rot = np.dot(current_rot, R)
         if self.config.VERBOSITY > 0:
             print("Desired position:", desired_pos, "Desired rotation:", desired_rot)
-        desired_rot = Rotation.from_matrix(desired_rot).as_quat()
+        desired_rot = Rotation.from_matrix(desired_rot).as_quat(canonical=True)
 
         self.move_with_debug_dot(desired_pos, desired_rot)
 
@@ -330,49 +297,18 @@ class ArmEnv(Environment):
                 rgbaColor=[1, 0, 0, 1],
                 visualFramePosition=desired_pos,
             )
-            red_dot_id = p.createMultiBody(
+            self.objects["red_dot_id"] = p.createMultiBody(
                 baseVisualShapeIndex=red_dot,
                 baseMass=0,
                 baseInertialFramePosition=desired_pos,
             )
-            p.resetBasePositionAndOrientation(red_dot_id, desired_pos, desired_rot)
+            p.resetBasePositionAndOrientation(self.objects["red_dot_id"], desired_pos, desired_rot)
         # move the robot
         self.move_to_target_position_and_orientation(desired_pos, desired_rot)
         if self.config.VERBOSITY > 0:
-            p.removeBody(red_dot_id)
-
-    def replay_demo(self, demo):
-        """
-        Replays a demonstration by moving the end-effector according to the input velocities.
-        :param demo: The demonstration to replay
-        """
-        if self.config.VERBOSITY > 0:
-            print("Replaying demonstration", demo)
-        for velocities in demo:
-            p.setJointMotorControlArray(
-                self.objects["arm"],
-                range(7),
-                p.VELOCITY_CONTROL,
-                targetVelocities=velocities,
-            )
-            p.stepSimulation()
-            self.get_rgbd_image()
-
-    def record_demo(self):
-        """
-        Record a demonstration by moving the end-effector, and stores velocities
-        that can then be replayed by the "replay_demo" function.
-        """
-        bn_image, bn_depth = self.get_rgbd_image()
-        velocities = []
-        target_pos = p.getBasePositionAndOrientation(self.objects["object"])[0]
-
-        while not self.is_target_reached(target_pos):
-            self.step_to_target(target_pos)
-            joint_states = p.getJointStates(self.objects["arm"], range(7))
-            velocities.append([link_state[1] for link_state in joint_states])
-
-        return {"rgb_bn": bn_image, "depth_bn": bn_depth, "demo_vels": velocities}
+            if "red_dot_id" in self.objects:
+                p.removeBody(self.objects["red_dot_id"])
+                self.objects.pop("red_dot_id")
 
     @staticmethod
     def get_intrinsics(fov, width, height):
@@ -501,7 +437,7 @@ class ArmEnv(Environment):
                 new_eef_orientation,
             )
 
-        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat()
+        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat(canonical=True)
 
         self.move_with_debug_dot(new_eef_position, new_eef_orientation)
 
@@ -518,13 +454,11 @@ class ArmEnv(Environment):
             world_points.append(point)
         return world_points
 
-    def draw_points_in_3d(self, live_img, depth_buffer, points):
+    def draw_points_in_3d(self, live_img, depth_buffer):
         """
         Draw projections of the points in 3D space.
         :param live_img: The live image from the camera
         :param depth_buffer: The depth buffer from the camera
-        :param points: The points to draw
-        :return: The points drawn in 3D space
         """
         all_pixels_in_camera_feed = []
         for x in range(self.config.LOAD_SIZE):
@@ -537,10 +471,83 @@ class ArmEnv(Environment):
         colors = live_img.reshape(-1, 3) / 255.0  # Normalize BGR image values to [0, 1]
         reduced_colors = colors[::8]
         p.removeAllUserDebugItems()
-        if points != -1:
-            p.removeUserDebugItem(points)
-        points = p.addUserDebugPoints(world_points, reduced_colors, 5)
-        return points
+        if self.objects.get("points_debug_3d") is not None:
+            p.removeUserDebugItem(self.objects["points_debug_3d"])
+        self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, reduced_colors, 5)
+
+    # OLD DEMO CODE, TO BE REMOVED
+    def replay_demo(self, demo):
+        """
+        Replays a demonstration by moving the end-effector according to the input velocities.
+        :param demo: The demonstration to replay
+        """
+        if self.config.VERBOSITY > 0:
+            print("Replaying demonstration", demo)
+        for velocities in demo:
+            p.setJointMotorControlArray(
+                self.objects["arm"],
+                range(7),
+                p.VELOCITY_CONTROL,
+                targetVelocities=velocities,
+            )
+            p.stepSimulation()
+            self.get_rgbd_image()
+
+    def record_demo(self):
+        """
+        Record a demonstration by moving the end-effector, and stores velocities
+        that can then be replayed by the "replay_demo" function.
+        """
+        bn_image, bn_depth = self.get_rgbd_image()
+        velocities = []
+        target_pos = p.getBasePositionAndOrientation(self.objects["object"])[0]
+
+        while not self.is_target_reached(target_pos):
+            self.step_to_target(target_pos)
+            joint_states = p.getJointStates(self.objects["arm"], range(7))
+            velocities.append([link_state[1] for link_state in joint_states])
+
+        return {"rgb_bn": bn_image, "depth_bn": bn_depth, "demo_vels": velocities}
+
+    def is_target_reached(self, target_position, target_orientation=None):
+        """
+        Check if the end-effector is close to the target position.
+        :param target_orientation: The orientation of the target
+        :param target_position: the position of the target
+        :return: True if the end-effector is close to the target position, False otherwise
+        """
+        gripper_pos, gripper_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
+        if target_orientation is None:
+            target_orientation = gripper_orientation
+        if len(target_orientation) != 4:
+            target_orientation = Rotation.from_matrix(target_orientation).as_quat(canonical=True)
+        return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(
+            target_orientation, gripper_orientation, atol=0.05
+        )
+
+    def step_to_target(self, target_position, target_orientation=None):
+        """
+        Move the arm to the target position by performing one step.
+        :param target_orientation: the orientation of the target
+        :param target_position: the position of the target
+        """
+        if target_orientation is not None:
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"], 11, target_position, target_orientation
+            )
+        else:
+            target_joint_positions = p.calculateInverseKinematics(
+                self.objects["arm"], 11, target_position
+            )
+
+        p.setJointMotorControlArray(
+            self.objects["arm"],
+            range(9),
+            p.POSITION_CONTROL,
+            targetPositions=target_joint_positions,
+        )
+        p.stepSimulation()
+        self.get_rgbd_image()
 
 
 if __name__ == "__main__":
