@@ -109,7 +109,7 @@ class ArmEnv(Environment):
 
         # move the arm a little bit so the camera can see the object
         eef_pos, _ = p.getLinkState(self.objects["arm"], 11)[:2]
-        pos = [pos_x, pos_y, eef_pos[2]]  # TODO change this back to x_base, y_base, eef_pos[2]
+        pos = [x_base, y_base, eef_pos[2]]
         self.move_to_target_position_and_orientation(pos)
 
     def move_to_target_position_and_orientation(self, target_position, target_orientation=None):
@@ -479,80 +479,6 @@ class ArmEnv(Environment):
         if self.objects.get("points_debug_3d") is not None:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
         self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, reduced_colors, 5)
-
-    # TODO: OLD DEMO CODE, TO BE REMOVED
-    def replay_demo(self, demo):
-        """
-        Replays a demonstration by moving the end-effector according to the input velocities.
-        :param demo: The demonstration to replay
-        """
-        if self.config.VERBOSITY > 0:
-            print("Replaying demonstration", demo)
-        for velocities in demo:
-            p.setJointMotorControlArray(
-                self.objects["arm"],
-                range(7),
-                p.VELOCITY_CONTROL,
-                targetVelocities=velocities,
-            )
-            p.stepSimulation()
-            self.get_rgbd_image()
-
-    def record_demo(self):
-        """
-        Record a demonstration by moving the end-effector, and stores velocities
-        that can then be replayed by the "replay_demo" function.
-        """
-        bn_image, bn_depth = self.get_rgbd_image()
-        velocities = []
-        target_pos = p.getBasePositionAndOrientation(self.objects["object"])[0]
-
-        while not self.is_target_reached(target_pos):
-            self.step_to_target(target_pos)
-            joint_states = p.getJointStates(self.objects["arm"], range(7))
-            velocities.append([link_state[1] for link_state in joint_states])
-
-        return {"rgb_bn": bn_image, "depth_bn": bn_depth, "demo_vels": velocities}
-
-    def is_target_reached(self, target_position, target_orientation=None):
-        """
-        Check if the end-effector is close to the target position.
-        :param target_orientation: The orientation of the target
-        :param target_position: the position of the target
-        :return: True if the end-effector is close to the target position, False otherwise
-        """
-        gripper_pos, gripper_orientation = p.getLinkState(self.objects["arm"], 11)[:2]
-        if target_orientation is None:
-            target_orientation = gripper_orientation
-        if len(target_orientation) != 4:
-            target_orientation = Rotation.from_matrix(target_orientation).as_quat(canonical=True)
-        return np.allclose(target_position, gripper_pos, atol=0.05) and np.allclose(
-            target_orientation, gripper_orientation, atol=0.05
-        )
-
-    def step_to_target(self, target_position, target_orientation=None):
-        """
-        Move the arm to the target position by performing one step.
-        :param target_orientation: the orientation of the target
-        :param target_position: the position of the target
-        """
-        if target_orientation is not None:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"], 11, target_position, target_orientation
-            )
-        else:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"], 11, target_position
-            )
-
-        p.setJointMotorControlArray(
-            self.objects["arm"],
-            range(9),
-            p.POSITION_CONTROL,
-            targetPositions=target_joint_positions,
-        )
-        p.stepSimulation()
-        self.get_rgbd_image()
 
 
 if __name__ == "__main__":
