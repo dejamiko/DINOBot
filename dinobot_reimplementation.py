@@ -198,7 +198,6 @@ def deploy_dinobot(env, data, config):
     rgb_bn_path = save_rgb_image(rgb_bn, "bn")
     error = np.inf
     counter = 0
-    limit = 100
     while error > config.ERR_THRESHOLD:
         # Collect observations at the current pose.
         rgb_live, depth_live = env.get_rgbd_image()
@@ -309,7 +308,8 @@ def deploy_dinobot(env, data, config):
         env.move_in_camera_frame(t, R)
         counter += 1
 
-        if counter > limit:
+        if counter > config.TRIES_LIMIT:
+            print("Reached tries limit")
             return False
 
     # Once error is small enough, replay demo.
@@ -371,6 +371,7 @@ def run_dino_once(config):
     env.reset()
     # load a new object
     success = deploy_dinobot(env, data, config)
+    env.disconnect()
     return success
 
 
@@ -384,6 +385,7 @@ if __name__ == "__main__":
     for i in range(num_of_runs):
         config.SEED = i
         success = run_dino_once(config)
+        print(f"Success: {success}")
         if success:
             successes += 1
 
@@ -394,6 +396,7 @@ if __name__ == "__main__":
     for i in range(num_of_runs):
         config.SEED = i
         success = run_dino_once(config)
+        print(f"Success: {success}")
         if success:
             successes += 1
 

@@ -171,7 +171,7 @@ class ArmEnv(Environment):
                 if self.config.VERBOSITY > 0:
                     self.draw_points_in_3d(live_img, depth_buffer)
             else:
-                time.sleep(1. / 2400.)
+                time.sleep(1. / 240.)
         if self.config.VERBOSITY > 0:
             if "points_debug_3d" in self.objects:
                 p.removeUserDebugItem(self.objects["points_debug_3d"])
@@ -479,6 +479,13 @@ class ArmEnv(Environment):
         if self.objects.get("points_debug_3d") is not None:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
         self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, reduced_colors, 5)
+
+    @staticmethod
+    def disconnect():
+        """
+        Disconnect the simulation environment.
+        """
+        p.disconnect()
 
 
 if __name__ == "__main__":

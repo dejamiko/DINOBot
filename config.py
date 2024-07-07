@@ -4,7 +4,7 @@ import numpy as np
 class Config:
     SEED = 0
     # DINOBot deployment constants
-    ERR_THRESHOLD = 0.04
+    ERR_THRESHOLD = 0.02
     IMAGE_DIR = "images/"
     # using the ssh tunnel from home ssh -L 8080:linnet.doc.ic.ac.uk:8000 md1823@shell5.doc.ic.ac.uk
     # BASE_URL = "http://localhost:8080/"
@@ -13,6 +13,7 @@ class Config:
     RECOMPUTE_EVERY = 20
     USE_FAST_CORRESPONDENCES = False
     DRAW_CORRESPONDENCES = False
+    TRIES_LIMIT = 100
 
     NUM_PAIRS = 8
     LOAD_SIZE = 224
