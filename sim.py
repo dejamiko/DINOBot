@@ -26,7 +26,12 @@ class ArmEnv(Environment):
         """
         super().__init__(config)
         self.objects = {}
-        p.connect(p.GUI)
+        # set seed
+        np.random.seed(self.config.SEED)
+        if self.config.USE_GUI:
+            p.connect(p.GUI)
+        else:
+            p.connect(p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self._setup_simulation_basic()
         self.move_arm_to_home_position()
@@ -89,7 +94,7 @@ class ArmEnv(Environment):
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
         pos_x = np.random.uniform(-0.1, 0.1) + x_base if self.config.RANDOM_OBJECT_POSITION else x_base
         pos_y = np.random.uniform(-0.1, 0.1) + y_base if self.config.RANDOM_OBJECT_POSITION else y_base
-        angle = np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_POSITION else 0
+        angle = np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
         self.objects[f"object"] = p.loadURDF(
             object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle])
         )
@@ -104,7 +109,7 @@ class ArmEnv(Environment):
 
         # move the arm a little bit so the camera can see the object
         eef_pos, _ = p.getLinkState(self.objects["arm"], 11)[:2]
-        pos = [x_base, y_base, eef_pos[2]]
+        pos = [pos_x, pos_y, eef_pos[2]]  # TODO change this back to x_base, y_base, eef_pos[2]
         self.move_to_target_position_and_orientation(pos)
 
     def move_to_target_position_and_orientation(self, target_position, target_orientation=None):
@@ -475,7 +480,7 @@ class ArmEnv(Environment):
             p.removeUserDebugItem(self.objects["points_debug_3d"])
         self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, reduced_colors, 5)
 
-    # OLD DEMO CODE, TO BE REMOVED
+    # TODO: OLD DEMO CODE, TO BE REMOVED
     def replay_demo(self, demo):
         """
         Replays a demonstration by moving the end-effector according to the input velocities.

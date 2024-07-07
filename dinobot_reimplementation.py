@@ -15,7 +15,7 @@ import torch
 from PIL import Image
 
 from config import Config
-from sim import ArmEnv
+from sim_keyboard_demo_capturing import DemoSim
 
 
 def find_correspondences(image_path1, image_path2, url, config):
@@ -52,13 +52,13 @@ def find_correspondences(image_path1, image_path2, url, config):
 
 
 def find_correspondeces_fast(
-    image_path1,
-    image_path2,
-    url,
-    config,
-    num_patches=None,
-    descriptor_vectors=None,
-    points1=None,
+        image_path1,
+        image_path2,
+        url,
+        config,
+        num_patches=None,
+        descriptor_vectors=None,
+        points1=None,
 ):
     url += "correspondences_fast"
     with open(image_path1, "rb") as f:
@@ -198,6 +198,7 @@ def deploy_dinobot(env, data, config):
     rgb_bn_path = save_rgb_image(rgb_bn, "bn")
     error = np.inf
     counter = 0
+    limit = 100
     while error > config.ERR_THRESHOLD:
         # Collect observations at the current pose.
         rgb_live, depth_live = env.get_rgbd_image()
@@ -295,7 +296,8 @@ def deploy_dinobot(env, data, config):
         points2 = env.project_to_3d(points2_2d, depth_live)
 
         error = compute_error(points1, points2)
-        print(f"Error: {error}, time taken: {time_taken}")
+        if config.VERBOSITY > 0:
+            print(f"Error: {error}, time taken: {time_taken}")
 
         if error < config.ERR_THRESHOLD:
             break
@@ -307,8 +309,11 @@ def deploy_dinobot(env, data, config):
         env.move_in_camera_frame(t, R)
         counter += 1
 
+        if counter > limit:
+            return False
+
     # Once error is small enough, replay demo.
-    env.replay_demo(demo_vels)
+    return env.replay_demo(demo_vels)
 
 
 def get_embeddings(image_path, url):
@@ -353,23 +358,43 @@ def calculate_object_similarities(config):
     return similarities
 
 
-if __name__ == "__main__":
-    config = Config()
-    config.VERBOSITY = 0
-    config.USE_FAST_CORRESPONDENCES = True
-    config.DRAW_CORRESPONDENCES = True
-    config.RANDOM_OBJECT_POSITION = True
+def run_dino_once(config):
     # Remove all images from the working directory
     clear_images(config)
 
     # RECORD DEMO:
-    env = ArmEnv(config)
-    env.load_object()
-    data = env.record_demo()
+    env = DemoSim(config)
+    data = env.load_demonstration("demonstrations/demonstration_000.json")
 
     # TEST TIME DEPLOYMENT
     # Move/change the object and move the end-effector to the home (or a random) pose.
     env.reset()
-    env.load_object()
     # load a new object
-    deploy_dinobot(env, data, config)
+    success = deploy_dinobot(env, data, config)
+    return success
+
+
+if __name__ == "__main__":
+    config = Config()
+    config.VERBOSITY = 0
+    config.USE_GUI = False
+    config.USE_FAST_CORRESPONDENCES = True
+    num_of_runs = 10
+    successes = 0
+    for i in range(num_of_runs):
+        config.SEED = i
+        success = run_dino_once(config)
+        if success:
+            successes += 1
+
+    print(f"Success rate: {successes}/{num_of_runs} with fast correspondences")
+
+    config.USE_FAST_CORRESPONDENCES = False
+    successes = 0
+    for i in range(num_of_runs):
+        config.SEED = i
+        success = run_dino_once(config)
+        if success:
+            successes += 1
+
+    print(f"Success rate: {successes}/{num_of_runs} with normal correspondences")

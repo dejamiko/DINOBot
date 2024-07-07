@@ -18,7 +18,6 @@ class DemoSim(ArmEnv):
         self.recorded_data = []
         self.recently_triggered = 10
         self.load_object()
-        self.create_target_balls()
         self.movement_key_mappings = {
             ord("s"): lambda: (0.01, 0, 0),  # positive x
             ord("x"): lambda: (-0.01, 0, 0),  # negative x
@@ -61,7 +60,6 @@ class DemoSim(ArmEnv):
             p.POSITION_CONTROL,
             targetPositions=joint_positions
         )
-        self.move_target_balls(position, orientation)
 
     def fast_move_to_home(self):
         """
@@ -75,69 +73,6 @@ class DemoSim(ArmEnv):
         )
         for _ in range(100):
             p.stepSimulation()
-
-    def create_target_balls(self):
-        """
-        Create debug visualisation of a target ball.
-        """
-        if "orange_dot" in self.objects:
-            p.removeBody(self.objects["orange_dot"])
-        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
-        orange_dot = p.createVisualShape(
-            p.GEOM_SPHERE,
-            radius=0.02,
-            rgbaColor=[1, 0.5, 0, 1],
-            visualFramePosition=pos,
-        )
-
-        # Initialize lists for additional spheres (links) and their positions
-        additional_balls = []
-        link_positions = []
-
-        for i in range(-4, 5):
-            for axis in range(3):
-                offset = [0, 0, 0]
-                offset[axis] = 0.1 * i
-                additional_balls.append(
-                    p.createVisualShape(
-                        p.GEOM_SPHERE,
-                        radius=0.01,
-                        rgbaColor=[1, 0.5, 0, 1],
-                        visualFramePosition=np.array(pos) + np.array(offset),
-                    )
-                )
-                link_positions.append(offset)
-
-        # Create the multi body with the central sphere as the base and additional spheres as links
-        self.objects["orange_dot"] = p.createMultiBody(
-            baseVisualShapeIndex=orange_dot,
-            baseInertialFramePosition=pos,
-            baseInertialFrameOrientation=rot,
-            baseMass=0,
-            linkMasses=[0] * len(additional_balls),  # Assuming the links are massless
-            linkCollisionShapeIndices=[-1] * len(additional_balls),  # No collision shapes for the links
-            linkVisualShapeIndices=additional_balls,
-            linkPositions=link_positions,
-            linkOrientations=[(0, 0, 0, 1)] * len(additional_balls),  # No orientation needed for the links
-            linkInertialFramePositions=[(0, 0, 0)] * len(additional_balls),
-            linkInertialFrameOrientations=[(0, 0, 0, 1)] * len(additional_balls),
-            linkParentIndices=[0] * len(additional_balls),  # All links are children of the base
-            linkJointTypes=[p.JOINT_FIXED] * len(additional_balls),  # Fixed joints to keep the shape rigid
-            linkJointAxis=[(0, 0, 0)] * len(additional_balls)  # No axis needed for fixed joints
-        )
-
-    def move_target_balls(self, position, rotation):
-        """
-        Move the target balls to a specific position and orientation.
-        :param position: The position to move to.
-        :param rotation: The orientation to move to.
-        :return: The target balls moved to the specified position and orientation.
-        """
-        p.resetBasePositionAndOrientation(
-            self.objects["orange_dot"],
-            position,
-            rotation
-        )
 
     def move_in_xyz(self, x, y, z):
         """
@@ -221,6 +156,8 @@ class DemoSim(ArmEnv):
             textSize=2
         )
         self.recorded_data = []
+        img, depth_buffer = self.get_rgbd_image()
+        self.recorded_data.append((img, depth_buffer))
 
     def stop_recording(self):
         """
@@ -240,7 +177,16 @@ class DemoSim(ArmEnv):
                 break
             i += 1
         with open(filename, "w") as f:
-            json.dump({"recorded_data": self.recorded_data}, f)
+            # remove the first frame as it is the images
+            img, depth_buffer = self.recorded_data.pop(0)
+            json.dump(
+                {
+                    "recorded_data": self.recorded_data,
+                    "image": img.tolist(),
+                    "depth_buffer": depth_buffer.tolist()
+                },
+                f
+            )
         if self.config.VERBOSITY > 0:
             print(f"Saved demonstration with {len(self.recorded_data)} frames to {filename}")
         self.recorded_data = []
@@ -316,14 +262,15 @@ class DemoSim(ArmEnv):
         demo = f"{directory}demonstration_{str(i).zfill(3)}.json"
         if self.config.VERBOSITY > 0:
             print(f"Replaying demo {demo}")
-        self.replay_demo(demo)
+        data = self.load_demonstration(demo)["demo_vels"]
+        self.replay_demo(data)
 
     def replay_demo(self, demo):
         """
-        Replay a demonstration from a file.
-        :param demo: The file to replay.
+        Replay a demonstration from a list of keystrokes.
+        :param demo: The demonstration to replay.
         """
-        self.reset()
+        self.recently_triggered = 10
         # create text on the screen to show that the demo is playing
         self.objects["replaying_text"] = p.addUserDebugText(
             "Replaying demo",
@@ -331,26 +278,37 @@ class DemoSim(ArmEnv):
             textColorRGB=[1, 0, 0],
             textSize=2
         )
-        with open(demo, "r") as f:
-            data = json.load(f)["recorded_data"]
         current_index = 0
-        for index, keys in data:
+        success = False
+        for index, keys in demo:
             if self.config.VERBOSITY > 0:
                 print(f"Replaying index {index}, with keys {keys}")
             while current_index < int(index):
                 if self.config.VERBOSITY > 0:
                     print(f"Skipping index {current_index}")
-                p.stepSimulation()
-                time.sleep(1. / 120.)
-                current_index += 1
+                current_index = self.single_frame(current_index)
             keys = [int(k) for k in keys]
             keys = [k for k in keys if k in self.movement_key_mappings]
             self.control_movement_with_keys(keys)
-            p.stepSimulation()
-            time.sleep(1. / 120.)
-            current_index += 1
+            success = success or self.determine_grasp_success()
+
+            current_index = self.single_frame(current_index)
+
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
+        return success
+
+    @staticmethod
+    def single_frame(current_index):
+        """
+        Perform a single frame in the simulation.
+        :param current_index: The current index in the simulation.
+        :return: The updated index.
+        """
+        p.stepSimulation()
+        time.sleep(1. / 120.)
+        current_index += 1
+        return current_index
 
     def reset(self):
         """
@@ -364,14 +322,48 @@ class DemoSim(ArmEnv):
         self.recorded_data = []
         self.recently_triggered = 10
         self.load_object()
-        self.create_target_balls()
+
+    def load_demonstration(self, filename):
+        """
+        Load a demonstration from a file.
+        :param filename: The filename of the demonstration.
+        :return: The demonstration as a dictionary.
+        """
+        with open(filename, "r") as file:
+            demonstration = json.load(file)
+        data = {
+            "rgb_bn": np.array(demonstration["image"], dtype=np.uint8).reshape(
+                self.config.LOAD_SIZE, self.config.LOAD_SIZE, 3),
+            "depth_bn": np.array(demonstration["depth_buffer"]).reshape(self.config.LOAD_SIZE, -1),
+            "demo_vels": demonstration["recorded_data"]
+        }
+        return data
+
+    def determine_grasp_success(self):
+        """
+        Determine if the grasp was successful.
+        :return: True if the grasp was successful, False otherwise.
+        """
+        # check if the object is higher than the table
+        pos, _ = p.getBasePositionAndOrientation(self.objects["object"])
+        if pos[2] < self.config.OBJECT_X_Y_Z_BASE[2] + 0.1:
+            return False
+        return True
+
+
+def record_demo():
+    while True:
+        sim.control_arm()
+        p.stepSimulation()
+        time.sleep(1. / 120.)
 
 
 if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 0
     sim = DemoSim(config)
-    while True:
-        sim.control_arm()
-        p.stepSimulation()
-        time.sleep(1. / 120.)
+
+    # record_demo()
+
+    data = sim.load_demonstration("demonstrations/demonstration_000.json")
+    sim.replay_demo(data["demo_vels"])

@@ -7,6 +7,7 @@ from config import Config
 from sim import ArmEnv
 
 
+# TODO this doesn't record anything, just moves as requested with the debug parameters
 class DemoSim(ArmEnv):
     def __init__(self, task_name):
         super(DemoSim, self).__init__(task_name)
@@ -80,18 +81,12 @@ class DemoSim(ArmEnv):
         """
         if "orange_dot" in self.objects:
             p.removeBody(self.objects["orange_dot"])
-        desired_pos = self.debug_parameters["x"]["default"], self.debug_parameters["y"]["default"], \
-            self.debug_parameters["z"]["default"]
-        desired_rot = p.getQuaternionFromEuler([
-            self.debug_parameters["roll"]["default"],
-            self.debug_parameters["pitch"]["default"],
-            self.debug_parameters["yaw"]["default"]
-        ])
+        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
         orange_dot = p.createVisualShape(
             p.GEOM_SPHERE,
             radius=0.02,
             rgbaColor=[1, 0.5, 0, 1],
-            visualFramePosition=desired_pos,
+            visualFramePosition=pos,
         )
 
         # Initialize lists for additional spheres (links) and their positions
@@ -107,7 +102,7 @@ class DemoSim(ArmEnv):
                         p.GEOM_SPHERE,
                         radius=0.01,
                         rgbaColor=[1, 0.5, 0, 1],
-                        visualFramePosition=np.array(desired_pos) + np.array(offset),
+                        visualFramePosition=np.array(pos) + np.array(offset),
                     )
                 )
                 link_positions.append(offset)
@@ -115,8 +110,8 @@ class DemoSim(ArmEnv):
         # Create the multi body with the central sphere as the base and additional spheres as links
         self.objects["orange_dot"] = p.createMultiBody(
             baseVisualShapeIndex=orange_dot,
-            baseInertialFramePosition=desired_pos,
-            baseInertialFrameOrientation=desired_rot,
+            baseInertialFramePosition=pos,
+            baseInertialFrameOrientation=rot,
             baseMass=0,
             linkMasses=[0] * len(additional_balls),  # Assuming the links are massless
             linkCollisionShapeIndices=[-1] * len(additional_balls),  # No collision shapes for the links
@@ -128,6 +123,19 @@ class DemoSim(ArmEnv):
             linkParentIndices=[0] * len(additional_balls),  # All links are children of the base
             linkJointTypes=[p.JOINT_FIXED] * len(additional_balls),  # Fixed joints to keep the shape rigid
             linkJointAxis=[(0, 0, 0)] * len(additional_balls)  # No axis needed for fixed joints
+        )
+
+    def move_target_balls(self, position, rotation):
+        """
+        Move the target balls to a specific position and orientation.
+        :param position: The position to move to.
+        :param rotation: The orientation to move to.
+        :return: The target balls moved to the specified position and orientation.
+        """
+        p.resetBasePositionAndOrientation(
+            self.objects["orange_dot"],
+            position,
+            rotation
         )
 
     def update_parameters(self):
@@ -185,19 +193,6 @@ class DemoSim(ArmEnv):
             self.move_target_balls(position, rotation)
 
             self.fast_move(position, rotation)
-
-    def move_target_balls(self, position, rotation):
-        """
-        Move the target balls to a specific position and orientation.
-        :param position: The position to move to.
-        :param rotation: The orientation to move to.
-        :return: The target balls moved to the specified position and orientation.
-        """
-        p.resetBasePositionAndOrientation(
-            self.objects["orange_dot"],
-            position,
-            rotation
-        )
 
 
 if __name__ == "__main__":

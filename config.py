@@ -2,13 +2,14 @@ import numpy as np
 
 
 class Config:
+    SEED = 0
     # DINOBot deployment constants
     ERR_THRESHOLD = 0.04
     IMAGE_DIR = "images/"
     # using the ssh tunnel from home ssh -L 8080:linnet.doc.ic.ac.uk:8000 md1823@shell5.doc.ic.ac.uk
-    BASE_URL = "http://localhost:8080/"
+    # BASE_URL = "http://localhost:8080/"
     # otherwise
-    # BASE_URL = 'http://linnet.doc.ic.ac.uk:8000/'
+    BASE_URL = 'http://kingfisher.doc.ic.ac.uk:8000/'
     RECOMPUTE_EVERY = 20
     USE_FAST_CORRESPONDENCES = False
     DRAW_CORRESPONDENCES = False
@@ -25,6 +26,7 @@ class Config:
     DEVICE = "cuda"
 
     # Simulation constants
+    USE_GUI = True
     VERBOSITY = 1
     GRAVITY = -9.81
     ARM_BASE_POSITION = (0, 0, 1.2)
@@ -42,7 +44,8 @@ class Config:
     CAMERA_TO_EEF_TRANSLATION = (0, 0, 0.05)
     CAMERA_TO_EEF_ROTATION = (0, 0, -np.pi / 2)
     TAKE_IMAGE_AT_EVERY_STEP = False
-    RANDOM_OBJECT_POSITION = False
+    RANDOM_OBJECT_POSITION = True
+    RANDOM_OBJECT_ROTATION = True
 
     def get_dino_config(self):
         return {
