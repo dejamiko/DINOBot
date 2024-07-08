@@ -2,7 +2,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=md1823
-#SBATCH --output=out_hyper_%j.out
+#SBATCH --output=out_demo_%j.out
 
 
 source /vol/bitbucket/md1823/taskmaster/DINOBot/venv/bin/activate
