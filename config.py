@@ -47,6 +47,7 @@ class Config:
     TAKE_IMAGE_AT_EVERY_STEP = False
     RANDOM_OBJECT_POSITION = True
     RANDOM_OBJECT_ROTATION = True
+    MAX_STEPS = 200
 
     def get_dino_config(self):
         return {

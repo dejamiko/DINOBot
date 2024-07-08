@@ -158,7 +158,8 @@ class ArmEnv(Environment):
         )
         target_joint_positions = np.array(target_joint_positions)
         error = np.inf
-        while error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD:
+        step = 0
+        while error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD and step < self.config.MAX_STEPS:
             current_joint_positions = np.array([
                 p.getJointState(self.objects["arm"], i)[0] for i in range(p.getNumJoints(self.objects["arm"]))
             ])
@@ -172,6 +173,7 @@ class ArmEnv(Environment):
                     self.draw_points_in_3d(live_img, depth_buffer)
             else:
                 time.sleep(1. / 240.)
+            step += 1
         if self.config.VERBOSITY > 0:
             if "points_debug_3d" in self.objects:
                 p.removeUserDebugItem(self.objects["points_debug_3d"])
