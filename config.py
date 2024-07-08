@@ -16,7 +16,7 @@ class Config:
     TRIES_LIMIT = 100
 
     NUM_PAIRS = 8
-    LOAD_SIZE = 224
+    LOAD_SIZE = 320
     LAYER = 9
     FACET = "key"
     BIN = True
