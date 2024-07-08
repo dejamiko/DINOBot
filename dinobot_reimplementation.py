@@ -295,8 +295,8 @@ def deploy_dinobot(env, data, config):
         points2 = env.project_to_3d(points2_2d, depth_live)
 
         error = compute_error(points1, points2)
-        if config.VERBOSITY > 0:
-            print(f"Error: {error}, time taken: {time_taken}")
+        # if config.VERBOSITY > 0:
+        print(f"Error: {error}, time taken: {time_taken}")
 
         if error < config.ERR_THRESHOLD:
             break
