@@ -169,12 +169,12 @@ class ArmEnv(Environment):
             p.stepSimulation()
             if self.config.TAKE_IMAGE_AT_EVERY_STEP:
                 live_img, depth_buffer = self.get_rgbd_image()
-                if self.config.VERBOSITY > 0:
+                if self.config.VERBOSITY > 1:
                     self.draw_points_in_3d(live_img, depth_buffer)
             else:
                 time.sleep(1. / 240.)
             step += 1
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             if "points_debug_3d" in self.objects:
                 p.removeUserDebugItem(self.objects["points_debug_3d"])
                 self.objects.pop("points_debug_3d")
@@ -218,7 +218,7 @@ class ArmEnv(Environment):
             camera_position, camera_position + 0.1 * camera_vector, up_vector
         )
 
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             self.draw_debug_camera_axis(camera_position, rot_matrix)
 
         return width, height, projection_matrix, view_matrix, fov, near, far
@@ -280,11 +280,11 @@ class ArmEnv(Environment):
         current_rot = np.array(p.getMatrixFromQuaternion(current_rot)).reshape(3, 3)
 
         # calculate the desired position and rotation in world frame
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print("Current position:", current_pos, "Current rotation:", current_rot)
         desired_pos = current_pos + np.dot(current_rot, t)
         desired_rot = np.dot(current_rot, R)
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print("Desired position:", desired_pos, "Desired rotation:", desired_rot)
         desired_rot = Rotation.from_matrix(desired_rot).as_quat(canonical=True)
 
@@ -296,7 +296,7 @@ class ArmEnv(Environment):
         :param desired_pos: The desired position
         :param desired_rot: The desired rotation
         """
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             # add a red point at the desired position
             red_dot = p.createVisualShape(
                 p.GEOM_SPHERE,
@@ -312,7 +312,7 @@ class ArmEnv(Environment):
             p.resetBasePositionAndOrientation(self.objects["red_dot_id"], desired_pos, desired_rot)
         # move the robot
         self.move_to_target_position_and_orientation(desired_pos, desired_rot)
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             if "red_dot_id" in self.objects:
                 p.removeBody(self.objects["red_dot_id"])
                 self.objects.pop("red_dot_id")
@@ -393,7 +393,7 @@ class ArmEnv(Environment):
         :param t: The translation in the camera frame
         :param R: The rotation in the camera frame
         """
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print("Moving in camera frame")
         camera_position, camera_rotation = self.get_camera_position_and_rotation()
         camera_to_eef_position, camera_to_eef_orientation = (
@@ -421,7 +421,7 @@ class ArmEnv(Environment):
             new_camera_rotation, np.linalg.inv(camera_to_eef_orientation)
         )
 
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print(
                 "Old camera position:",
                 camera_position,

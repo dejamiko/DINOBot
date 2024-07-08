@@ -390,7 +390,7 @@ def run_dino_once(config):
 
 
 def run_fast_and_slow(config):
-    config.VERBOSITY = 0
+    config.VERBOSITY = 1
     config.USE_GUI = False
     config.USE_FAST_CORRESPONDENCES = True
     num_of_runs = 10
