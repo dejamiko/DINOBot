@@ -20,7 +20,7 @@ def find_correspondences(image_path1, image_path2, url, dino_config):
 
 def find_correspondences_locally(image_path1, image_path2, dino_config):
     results = correspondences_backend(dino_config, image_path1, image_path2)
-    if dino_config.DRAW_CORRESPONDENCES:
+    if dino_config["draw"]:
         return (
             results["points1"],
             results["points2"],
@@ -109,7 +109,7 @@ def find_correspondences_fast_locally(
     results = correspondences_fast_backend(
         dino_config, image_path1, image_path2, num_patches, descriptor_vectors, points1
     )
-    if dino_config.DRAW_CORRESPONDENCES:
+    if dino_config["draw"]:
         return (
             results["points1"],
             results["points2"],
