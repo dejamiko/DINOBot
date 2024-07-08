@@ -108,7 +108,7 @@ def find_correspondeces_fast(
         print(response.json())
 
 
-def find_transformation(X, Y):
+def find_transformation(X, Y, config):
     """
     Inputs: X, Y: lists of 3D points
     Outputs: R - 3x3 rotation matrix, t - 3-dim translation array.
@@ -129,7 +129,8 @@ def find_transformation(X, Y):
 
     # Code taken from https://nghiaho.com/?page_id=671
     if np.linalg.det(R) < 0:
-        print("det(R) < 0, reflection detected")
+        if config.VERBOSITY > 0:
+            print("det(R) < 0, reflection detected")
         Vt[2, :] *= -1
         R = Vt.T @ U.T
 
@@ -308,14 +309,14 @@ def deploy_dinobot(env, data, config):
         points2 = env.project_to_3d(points2_2d, depth_live)
 
         error = compute_error(points1, points2)
-        # if config.VERBOSITY > 0:
-        print(f"Error: {error}, time taken: {time_taken}")
+        if config.VERBOSITY > 0:
+            print(f"Error: {error}, time taken: {time_taken}")
 
         if error < config.ERR_THRESHOLD:
             break
 
         # Find rigid translation and rotation that aligns the points by minimising error, using SVD.
-        R, t = find_transformation(points1, points2)
+        R, t = find_transformation(points1, points2, config)
 
         # Move robot
         env.move_in_camera_frame(t, R)
