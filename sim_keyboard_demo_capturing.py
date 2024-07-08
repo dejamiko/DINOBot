@@ -171,7 +171,7 @@ class DemoSim(ArmEnv):
                 },
                 f,
             )
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print(
                 f"Saved demonstration with {len(self.recorded_data)} frames to {filename}"
             )
@@ -253,7 +253,7 @@ class DemoSim(ArmEnv):
         if i < 0:
             raise FileNotFoundError("No recorded demos found.")
         demo = f"{directory}demonstration_{str(i).zfill(3)}.json"
-        if self.config.VERBOSITY > 0:
+        if self.config.VERBOSITY > 1:
             print(f"Replaying demo {demo}")
         data = self.load_demonstration(demo)["demo_vels"]
         self.replay_demo(data)
@@ -271,10 +271,10 @@ class DemoSim(ArmEnv):
         current_index = 0
         success = False
         for index, keys in demo:
-            if self.config.VERBOSITY > 0:
+            if self.config.VERBOSITY > 1:
                 print(f"Replaying index {index}, with keys {keys}")
             while current_index < int(index):
-                if self.config.VERBOSITY > 0:
+                if self.config.VERBOSITY > 1:
                     print(f"Skipping index {current_index}")
                 current_index = self.single_frame(current_index)
             keys = [int(k) for k in keys]

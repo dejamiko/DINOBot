@@ -62,7 +62,7 @@ def compute_error(points1, points2):
     return np.linalg.norm(np.array(points1) - np.array(points2))
 
 
-def save_rgb_image(image, filename):
+def save_rgb_image(image, filename, image_directory):
     """
     Take a picture with the wrist camera and save it to disk.
     :param image: The image to save
@@ -70,26 +70,25 @@ def save_rgb_image(image, filename):
     :return: The path to the saved image
     """
     # first see if there already is an image with the same name
-    im_name = f"images/rgb_image_{filename}_0.png"
+    im_name = f"{image_directory}/rgb_image_{filename}_0.png"
     i = 0
     while os.path.exists(im_name):
         i += 1
-        im_name = f"images/rgb_image_{filename}_{i}.png"
+        im_name = f"{image_directory}/rgb_image_{filename}_{i}.png"
 
     cv2.imwrite(im_name, image)
 
     return im_name
 
 
-def clear_images(config):
+def clear_images(image_directory):
     """
     Clear all images from the working directory
     """
-    if not os.path.exists(config.IMAGE_DIR):
-        os.makedirs(config.IMAGE_DIR)
-    folder = config.IMAGE_DIR
-    for filename in os.listdir(folder):
-        file_path = os.path.join(folder, filename)
+    if not os.path.exists(image_directory):
+        os.makedirs(image_directory)
+    for filename in os.listdir(image_directory):
+        file_path = os.path.join(image_directory, filename)
         try:
             if os.path.isfile(file_path) or os.path.islink(file_path):
                 os.unlink(file_path)
@@ -99,12 +98,25 @@ def clear_images(config):
             print("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
-def deploy_dinobot(env, data, config):
+def set_up_images_directory(config):
+    base_directory = config.IMAGE_DIR
+    if not os.path.exists(base_directory):
+        os.makedirs(base_directory)
+    new_directory = base_directory + "/" + str(time.time())
+    try:
+        os.makedirs(new_directory)
+    except Exception as e:
+        print("Failed to create %s. Reason: %s" % (new_directory, e))
+    return new_directory
+
+
+def deploy_dinobot(env, data, config, image_directory):
     """
     Run the main dinobot loop with a single object
     :param env: The environment in which the robot is operating
     :param data: The data containing the bottleneck images and the demonstration velocities (after semantic retrieval)
     :param config: The configuration object
+    :param image_directory: The base image directory
     """
     rgb_bn, depth_bn, demo_vels = (
         data["rgb_bn"],
@@ -121,14 +133,14 @@ def deploy_dinobot(env, data, config):
     rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
     depth_bn = depth_bn.squeeze(0).numpy()
 
-    rgb_bn_path = save_rgb_image(rgb_bn, "bn")
+    rgb_bn_path = save_rgb_image(rgb_bn, "bn", image_directory)
     error = np.inf
     counter = 0
     num_patches, descriptor_vectors, points1_2d = None, None, None
     while error > config.ERR_THRESHOLD:
         # Collect observations at the current pose.
         rgb_live, depth_live = env.get_rgbd_image()
-        rgb_live_path = save_rgb_image(rgb_live, "live")
+        rgb_live_path = save_rgb_image(rgb_live, "live", image_directory)
 
         # Compute pixel correspondences between new observation and bottleneck observation.
         if config.USE_FAST_CORRESPONDENCES:
@@ -228,18 +240,20 @@ def calculate_object_similarities(config):
 
 def run_dino_once(config):
     # Remove all images from the working directory
-    clear_images(config)
+    image_directory = set_up_images_directory(config)
 
     # RECORD DEMO:
     env = DemoSim(config)
+    # for now, just load the latest demo
     data = env.load_demonstration("demonstrations/demonstration_000.json")
 
     # TEST TIME DEPLOYMENT
     # Move/change the object and move the end-effector to the home (or a random) pose.
     env.reset()
     # load a new object
-    success = deploy_dinobot(env, data, config)
+    success = deploy_dinobot(env, data, config, image_directory)
     env.disconnect()
+    clear_images(image_directory)
     return success
 
 
