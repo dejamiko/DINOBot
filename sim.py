@@ -2,6 +2,7 @@
 This file contains the code related to the simulation environment. It can be used within the DINOBot framework
 or for small independent experiments with the pybullet simulation environment.
 """
+
 import time
 
 import cv2
@@ -47,15 +48,15 @@ class ArmEnv(Environment):
         p.loadURDF("plane.urdf")
 
         self.objects["arm"] = p.loadURDF(
-            "franka_panda/panda.urdf",
-            self.config.ARM_BASE_POSITION,
-            useFixedBase=True
+            "franka_panda/panda.urdf", self.config.ARM_BASE_POSITION, useFixedBase=True
         )
 
         # use a table with no texture to make it easier for DINOBot to detect the objects
         self.objects["table"] = p.loadURDF(
-            "/additional_urdfs/table/table.urdf", self.config.TABLE_BASE_POSITION,
-            useFixedBase=False, globalScaling=2
+            "/additional_urdfs/table/table.urdf",
+            self.config.TABLE_BASE_POSITION,
+            useFixedBase=False,
+            globalScaling=2,
         )
 
         focus_position = p.getLinkState(self.objects["arm"], 11)[0]
@@ -92,9 +93,19 @@ class ArmEnv(Environment):
         """
         # load some object on the table somewhere random (within a certain range)
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
-        pos_x = np.random.uniform(-0.1, 0.1) + x_base if self.config.RANDOM_OBJECT_POSITION else x_base
-        pos_y = np.random.uniform(-0.1, 0.1) + y_base if self.config.RANDOM_OBJECT_POSITION else y_base
-        angle = np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
+        pos_x = (
+            np.random.uniform(-0.1, 0.1) + x_base
+            if self.config.RANDOM_OBJECT_POSITION
+            else x_base
+        )
+        pos_y = (
+            np.random.uniform(-0.1, 0.1) + y_base
+            if self.config.RANDOM_OBJECT_POSITION
+            else y_base
+        )
+        angle = (
+            np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
+        )
         self.objects[f"object"] = p.loadURDF(
             object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle])
         )
@@ -112,7 +123,9 @@ class ArmEnv(Environment):
         pos = [x_base, y_base, eef_pos[2]]
         self.move_to_target_position_and_orientation(pos)
 
-    def move_to_target_position_and_orientation(self, target_position, target_orientation=None):
+    def move_to_target_position_and_orientation(
+        self, target_position, target_orientation=None
+    ):
         """
         Move the arm to the target position.
         :param target_position: the position of the target in the world frame
@@ -141,7 +154,10 @@ class ArmEnv(Environment):
             )
 
         if len(target_joint_positions) != p.getNumJoints(self.objects["arm"]):
-            target_joint_positions += tuple([0] * (p.getNumJoints(self.objects["arm"]) - len(target_joint_positions)))
+            target_joint_positions += tuple(
+                [0]
+                * (p.getNumJoints(self.objects["arm"]) - len(target_joint_positions))
+            )
 
         self.move_to_target_joint_position(target_joint_positions)
 
@@ -159,20 +175,24 @@ class ArmEnv(Environment):
         target_joint_positions = np.array(target_joint_positions)
         error = np.inf
         step = 0
-        while error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD and step < self.config.MAX_STEPS:
-            current_joint_positions = np.array([
-                p.getJointState(self.objects["arm"], i)[0] for i in range(p.getNumJoints(self.objects["arm"]))
-            ])
-            error = np.linalg.norm(
-                current_joint_positions - target_joint_positions
+        while (
+            error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD
+            and step < self.config.MAX_STEPS
+        ):
+            current_joint_positions = np.array(
+                [
+                    p.getJointState(self.objects["arm"], i)[0]
+                    for i in range(p.getNumJoints(self.objects["arm"]))
+                ]
             )
+            error = np.linalg.norm(current_joint_positions - target_joint_positions)
             p.stepSimulation()
             if self.config.TAKE_IMAGE_AT_EVERY_STEP:
                 live_img, depth_buffer = self.get_rgbd_image()
                 if self.config.VERBOSITY > 1:
                     self.draw_points_in_3d(live_img, depth_buffer)
             else:
-                time.sleep(1. / 240.)
+                time.sleep(1.0 / 240.0)
             step += 1
         if self.config.VERBOSITY > 1:
             if "points_debug_3d" in self.objects:
@@ -309,7 +329,9 @@ class ArmEnv(Environment):
                 baseMass=0,
                 baseInertialFramePosition=desired_pos,
             )
-            p.resetBasePositionAndOrientation(self.objects["red_dot_id"], desired_pos, desired_rot)
+            p.resetBasePositionAndOrientation(
+                self.objects["red_dot_id"], desired_pos, desired_rot
+            )
         # move the robot
         self.move_to_target_position_and_orientation(desired_pos, desired_rot)
         if self.config.VERBOSITY > 1:
@@ -383,7 +405,9 @@ class ArmEnv(Environment):
         """
         camera_to_eef_position = np.array(self.config.CAMERA_TO_EEF_TRANSLATION)
         camera_to_eef_orientation = np.array(
-            p.getMatrixFromQuaternion(p.getQuaternionFromEuler(self.config.CAMERA_TO_EEF_ROTATION))
+            p.getMatrixFromQuaternion(
+                p.getQuaternionFromEuler(self.config.CAMERA_TO_EEF_ROTATION)
+            )
         ).reshape(3, 3)
         return camera_to_eef_position, camera_to_eef_orientation
 
@@ -444,7 +468,9 @@ class ArmEnv(Environment):
                 new_eef_orientation,
             )
 
-        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat(canonical=True)
+        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat(
+            canonical=True
+        )
 
         self.move_with_debug_dot(new_eef_position, new_eef_orientation)
 
@@ -480,7 +506,9 @@ class ArmEnv(Environment):
         p.removeAllUserDebugItems()
         if self.objects.get("points_debug_3d") is not None:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
-        self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, reduced_colors, 5)
+        self.objects["points_debug_3d"] = p.addUserDebugPoints(
+            world_points, reduced_colors, 5
+        )
 
     @staticmethod
     def disconnect():

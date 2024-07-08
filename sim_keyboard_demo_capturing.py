@@ -49,16 +49,13 @@ class DemoSim(ArmEnv):
         :param orientation: The orientation to move to.
         """
         joint_positions = p.calculateInverseKinematics(
-            self.objects["arm"],
-            11,
-            position,
-            orientation
+            self.objects["arm"], 11, position, orientation
         )
         p.setJointMotorControlArray(
             self.objects["arm"],
             [i for i in range(9)],
             p.POSITION_CONTROL,
-            targetPositions=joint_positions
+            targetPositions=joint_positions,
         )
 
     def fast_move_to_home(self):
@@ -69,7 +66,7 @@ class DemoSim(ArmEnv):
             self.objects["arm"],
             list(range(p.getNumJoints(self.objects["arm"]))),
             p.POSITION_CONTROL,
-            targetPositions=self.config.ARM_HOME_POSITION
+            targetPositions=self.config.ARM_HOME_POSITION,
         )
         for _ in range(100):
             p.stepSimulation()
@@ -95,7 +92,11 @@ class DemoSim(ArmEnv):
         """
         pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
         current_roll, current_pitch, current_yaw = p.getEulerFromQuaternion(rot)
-        new_roll, new_pitch, new_yaw = current_roll + roll, current_pitch + pitch, current_yaw + yaw
+        new_roll, new_pitch, new_yaw = (
+            current_roll + roll,
+            current_pitch + pitch,
+            current_yaw + yaw,
+        )
         new_rot = p.getQuaternionFromEuler([new_roll, new_pitch, new_yaw])
         self.fast_move(pos, new_rot)
 
@@ -105,18 +106,10 @@ class DemoSim(ArmEnv):
         """
         # make sure this closes with a lot of force to ensure the object is grasped
         p.setJointMotorControl2(
-            self.objects["arm"],
-            9,
-            p.POSITION_CONTROL,
-            targetPosition=0.0,
-            force=1000
+            self.objects["arm"], 9, p.POSITION_CONTROL, targetPosition=0.0, force=1000
         )
         p.setJointMotorControl2(
-            self.objects["arm"],
-            10,
-            p.POSITION_CONTROL,
-            targetPosition=0.0,
-            force=1000
+            self.objects["arm"], 10, p.POSITION_CONTROL, targetPosition=0.0, force=1000
         )
         self.gripper_open = False
 
@@ -127,16 +120,10 @@ class DemoSim(ArmEnv):
         if self.gripper_open:
             return
         p.setJointMotorControl2(
-            self.objects["arm"],
-            9,
-            p.POSITION_CONTROL,
-            targetPosition=0.04
+            self.objects["arm"], 9, p.POSITION_CONTROL, targetPosition=0.04
         )
         p.setJointMotorControl2(
-            self.objects["arm"],
-            10,
-            p.POSITION_CONTROL,
-            targetPosition=0.04
+            self.objects["arm"], 10, p.POSITION_CONTROL, targetPosition=0.04
         )
         self.gripper_open = True
 
@@ -150,10 +137,7 @@ class DemoSim(ArmEnv):
         self.index = 0
         # display "Recording" on the screen
         self.objects["recording_text"] = p.addUserDebugText(
-            "Recording",
-            [0, 0, 2],
-            textColorRGB=[1, 0, 0],
-            textSize=2
+            "Recording", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
         )
         self.recorded_data = []
         img, depth_buffer = self.get_rgbd_image()
@@ -183,12 +167,14 @@ class DemoSim(ArmEnv):
                 {
                     "recorded_data": self.recorded_data,
                     "image": img.tolist(),
-                    "depth_buffer": depth_buffer.tolist()
+                    "depth_buffer": depth_buffer.tolist(),
                 },
-                f
+                f,
             )
         if self.config.VERBOSITY > 0:
-            print(f"Saved demonstration with {len(self.recorded_data)} frames to {filename}")
+            print(
+                f"Saved demonstration with {len(self.recorded_data)} frames to {filename}"
+            )
         self.recorded_data = []
 
     def control_arm(self):
@@ -230,7 +216,14 @@ class DemoSim(ArmEnv):
             if key in self.movement_key_mappings:
                 if key in [ord("s"), ord("x"), ord("z"), ord("c"), ord("a"), ord("d")]:
                     translation += np.array(self.movement_key_mappings[key]())
-                elif key in [ord("i"), ord("k"), ord("j"), ord("l"), ord("u"), ord("o")]:
+                elif key in [
+                    ord("i"),
+                    ord("k"),
+                    ord("j"),
+                    ord("l"),
+                    ord("u"),
+                    ord("o"),
+                ]:
                     rotation += np.array(self.movement_key_mappings[key]())
                 else:
                     self.movement_key_mappings[key]()
@@ -273,10 +266,7 @@ class DemoSim(ArmEnv):
         self.recently_triggered = 10
         # create text on the screen to show that the demo is playing
         self.objects["replaying_text"] = p.addUserDebugText(
-            "Replaying demo",
-            [0, 0, 2],
-            textColorRGB=[1, 0, 0],
-            textSize=2
+            "Replaying demo", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
         )
         current_index = 0
         success = False
@@ -306,7 +296,7 @@ class DemoSim(ArmEnv):
         :return: The updated index.
         """
         p.stepSimulation()
-        time.sleep(1. / 120.)
+        time.sleep(1.0 / 120.0)
         current_index += 1
         return current_index
 
@@ -338,7 +328,7 @@ class DemoSim(ArmEnv):
         data = {
             "rgb_bn": img,
             "depth_bn": depth,
-            "demo_vels": demonstration["recorded_data"]
+            "demo_vels": demonstration["recorded_data"],
         }
         return data
 
@@ -358,7 +348,7 @@ def record_demo():
     while True:
         sim.control_arm()
         p.stepSimulation()
-        time.sleep(1. / 120.)
+        time.sleep(1.0 / 120.0)
 
 
 if __name__ == "__main__":

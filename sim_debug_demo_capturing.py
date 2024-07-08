@@ -21,16 +21,13 @@ class DemoSim(ArmEnv):
         :param orientation: The orientation to move to.
         """
         joint_positions = p.calculateInverseKinematics(
-            self.objects["arm"],
-            11,
-            position,
-            orientation
+            self.objects["arm"], 11, position, orientation
         )
         p.setJointMotorControlArray(
             self.objects["arm"],
             [i for i in range(9)],
             p.POSITION_CONTROL,
-            targetPositions=joint_positions
+            targetPositions=joint_positions,
         )
 
     def fast_move_to_home(self):
@@ -41,7 +38,7 @@ class DemoSim(ArmEnv):
             self.objects["arm"],
             list(range(p.getNumJoints(self.objects["arm"]))),
             p.POSITION_CONTROL,
-            targetPositions=self.config.ARM_HOME_POSITION
+            targetPositions=self.config.ARM_HOME_POSITION,
         )
         for _ in range(100):
             p.stepSimulation()
@@ -56,21 +53,51 @@ class DemoSim(ArmEnv):
         current_roll, current_pitch, current_yaw = p.getEulerFromQuaternion(rot)
 
         params_dictionary = {
-            "x": {"min": -0.5 + current_x, "max": 0.5 + current_x, "default": current_x, "previous_value": current_x},
+            "x": {
+                "min": -0.5 + current_x,
+                "max": 0.5 + current_x,
+                "default": current_x,
+                "previous_value": current_x,
+            },
             "placeholder": {"min": -1, "max": 1, "default": 0},
-            "y": {"min": -0.5 + current_y, "max": 0.5 + current_y, "default": current_y, "previous_value": current_y},
-            "z": {"min": -0.5 + current_z, "max": 0.5 + current_z, "default": current_z, "previous_value": current_z},
-            "roll": {"min": -np.pi, "max": np.pi, "default": current_roll, "previous_value": current_roll},
-            "pitch": {"min": -np.pi, "max": np.pi, "default": current_pitch, "previous_value": current_pitch},
-            "yaw": {"min": -np.pi, "max": np.pi, "default": current_yaw, "previous_value": current_yaw},
-            "home_button": {"min": 1, "max": 0, "default": 0}
+            "y": {
+                "min": -0.5 + current_y,
+                "max": 0.5 + current_y,
+                "default": current_y,
+                "previous_value": current_y,
+            },
+            "z": {
+                "min": -0.5 + current_z,
+                "max": 0.5 + current_z,
+                "default": current_z,
+                "previous_value": current_z,
+            },
+            "roll": {
+                "min": -np.pi,
+                "max": np.pi,
+                "default": current_roll,
+                "previous_value": current_roll,
+            },
+            "pitch": {
+                "min": -np.pi,
+                "max": np.pi,
+                "default": current_pitch,
+                "previous_value": current_pitch,
+            },
+            "yaw": {
+                "min": -np.pi,
+                "max": np.pi,
+                "default": current_yaw,
+                "previous_value": current_yaw,
+            },
+            "home_button": {"min": 1, "max": 0, "default": 0},
         }
         for param in params_dictionary.keys():
             param_id = p.addUserDebugParameter(
                 param,
                 params_dictionary[param]["min"],
                 params_dictionary[param]["max"],
-                params_dictionary[param]["default"]
+                params_dictionary[param]["default"],
             )
             params_dictionary[param]["id"] = param_id
         return params_dictionary
@@ -114,15 +141,20 @@ class DemoSim(ArmEnv):
             baseInertialFrameOrientation=rot,
             baseMass=0,
             linkMasses=[0] * len(additional_balls),  # Assuming the links are massless
-            linkCollisionShapeIndices=[-1] * len(additional_balls),  # No collision shapes for the links
+            linkCollisionShapeIndices=[-1]
+            * len(additional_balls),  # No collision shapes for the links
             linkVisualShapeIndices=additional_balls,
             linkPositions=link_positions,
-            linkOrientations=[(0, 0, 0, 1)] * len(additional_balls),  # No orientation needed for the links
+            linkOrientations=[(0, 0, 0, 1)]
+            * len(additional_balls),  # No orientation needed for the links
             linkInertialFramePositions=[(0, 0, 0)] * len(additional_balls),
             linkInertialFrameOrientations=[(0, 0, 0, 1)] * len(additional_balls),
-            linkParentIndices=[0] * len(additional_balls),  # All links are children of the base
-            linkJointTypes=[p.JOINT_FIXED] * len(additional_balls),  # Fixed joints to keep the shape rigid
-            linkJointAxis=[(0, 0, 0)] * len(additional_balls)  # No axis needed for fixed joints
+            linkParentIndices=[0]
+            * len(additional_balls),  # All links are children of the base
+            linkJointTypes=[p.JOINT_FIXED]
+            * len(additional_balls),  # Fixed joints to keep the shape rigid
+            linkJointAxis=[(0, 0, 0)]
+            * len(additional_balls),  # No axis needed for fixed joints
         )
 
     def move_target_balls(self, position, rotation):
@@ -133,9 +165,7 @@ class DemoSim(ArmEnv):
         :return: The target balls moved to the specified position and orientation.
         """
         p.resetBasePositionAndOrientation(
-            self.objects["orange_dot"],
-            position,
-            rotation
+            self.objects["orange_dot"], position, rotation
         )
 
     def update_parameters(self):
@@ -143,7 +173,10 @@ class DemoSim(ArmEnv):
         Update the user provided debug parameters of the simulation.
         """
         try:
-            if p.readUserDebugParameter(self.debug_parameters["home_button"]["id"]) == 1:
+            if (
+                p.readUserDebugParameter(self.debug_parameters["home_button"]["id"])
+                == 1
+            ):
                 self.fast_move_to_home()
                 p.removeAllUserParameters()
                 self.debug_parameters = self.create_debug_parameters()
@@ -161,7 +194,7 @@ class DemoSim(ArmEnv):
             "z": pos[2],
             "roll": current_roll,
             "pitch": current_pitch,
-            "yaw": current_yaw
+            "yaw": current_yaw,
         }
 
         for param in self.debug_parameters.keys():
@@ -182,13 +215,15 @@ class DemoSim(ArmEnv):
             position = [
                 self.debug_parameters["x"]["previous_value"],
                 self.debug_parameters["y"]["previous_value"],
-                self.debug_parameters["z"]["previous_value"]
+                self.debug_parameters["z"]["previous_value"],
             ]
-            rotation = p.getQuaternionFromEuler([
-                self.debug_parameters["roll"]["previous_value"],
-                self.debug_parameters["pitch"]["previous_value"],
-                self.debug_parameters["yaw"]["previous_value"]
-            ])
+            rotation = p.getQuaternionFromEuler(
+                [
+                    self.debug_parameters["roll"]["previous_value"],
+                    self.debug_parameters["pitch"]["previous_value"],
+                    self.debug_parameters["yaw"]["previous_value"],
+                ]
+            )
 
             self.move_target_balls(position, rotation)
 
@@ -202,4 +237,4 @@ if __name__ == "__main__":
     while True:
         sim.update_parameters()
         p.stepSimulation()
-        time.sleep(1. / 2400.)
+        time.sleep(1.0 / 2400.0)

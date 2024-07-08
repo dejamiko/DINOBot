@@ -4,7 +4,6 @@ environments. A server running the DINO model is used to offload the feature ext
 processes.
 """
 
-import json
 import os
 import shutil
 import time
@@ -15,97 +14,10 @@ import requests
 import torch
 import torchvision.transforms.functional as F
 import wandb
-from PIL import Image
 
 from config import Config
+from dino_features import get_correspondences
 from sim_keyboard_demo_capturing import DemoSim
-
-
-def find_correspondences(image_path1, image_path2, url, config):
-    url += "correspondences"
-    with open(image_path1, "rb") as f:
-        files = {"image1": f.read()}
-    with open(image_path2, "rb") as f:
-        files["image2"] = f.read()
-    files["config"] = json.dumps(config)
-    response = requests.post(url, files=files)
-    if response.status_code == 200:
-        parsed_response = response.json()
-        if config["draw"]:
-            image1_correspondences = Image.fromarray(
-                np.array(parsed_response["image1_correspondences"], dtype="uint8")
-            )
-            image2_correspondences = Image.fromarray(
-                np.array(parsed_response["image2_correspondences"], dtype="uint8")
-            )
-            return (
-                parsed_response["points1"],
-                parsed_response["points2"],
-                image1_correspondences,
-                image2_correspondences,
-                parsed_response["time_taken"],
-            )
-        return (
-            parsed_response["points1"],
-            parsed_response["points2"],
-            parsed_response["time_taken"],
-        )
-    else:
-        print(response.json())
-
-
-def find_correspondeces_fast(
-        image_path1,
-        image_path2,
-        url,
-        config,
-        num_patches=None,
-        descriptor_vectors=None,
-        points1=None,
-):
-    url += "correspondences_fast"
-    with open(image_path1, "rb") as f:
-        files = {"image1": f.read()}
-    with open(image_path2, "rb") as f:
-        files["image2"] = f.read()
-    args = {
-        "num_patches": num_patches,
-        "descriptor_vectors": descriptor_vectors,
-        "points1_2d": points1,
-        "config": config,
-    }
-
-    # save the arguments to a file as a json object and send this file
-    files["args"] = json.dumps(args)
-
-    response = requests.post(url, files=files)
-    if response.status_code == 200:
-        parsed_response = response.json()
-        if config["draw"]:
-            image1_correspondences = Image.fromarray(
-                np.array(parsed_response["image1_correspondences"], dtype="uint8")
-            )
-            image2_correspondences = Image.fromarray(
-                np.array(parsed_response["image2_correspondences"], dtype="uint8")
-            )
-            return (
-                parsed_response["points1"],
-                parsed_response["points2"],
-                image1_correspondences,
-                image2_correspondences,
-                parsed_response["time_taken"],
-                parsed_response["num_patches"],
-                parsed_response["descriptor_vectors"],
-            )
-        return (
-            parsed_response["points1"],
-            parsed_response["points2"],
-            parsed_response["time_taken"],
-            parsed_response["num_patches"],
-            parsed_response["descriptor_vectors"],
-        )
-    else:
-        print(response.json())
 
 
 def find_transformation(X, Y, config):
@@ -212,97 +124,39 @@ def deploy_dinobot(env, data, config):
     rgb_bn_path = save_rgb_image(rgb_bn, "bn")
     error = np.inf
     counter = 0
+    num_patches, descriptor_vectors, points1_2d = None, None, None
     while error > config.ERR_THRESHOLD:
         # Collect observations at the current pose.
         rgb_live, depth_live = env.get_rgbd_image()
         rgb_live_path = save_rgb_image(rgb_live, "live")
 
         # Compute pixel correspondences between new observation and bottleneck observation.
-        if config.DRAW_CORRESPONDENCES:
-            if config.USE_FAST_CORRESPONDENCES:
-                if counter % config.RECOMPUTE_EVERY == 0:
-                    (
-                        points1_2d,
-                        points2_2d,
-                        im_1_c,
-                        im_2_c,
-                        time_taken,
-                        num_patches,
-                        descriptor_vectors,
-                    ) = find_correspondeces_fast(
-                        rgb_bn_path,
-                        rgb_live_path,
-                        config.BASE_URL,
-                        config.get_dino_config(),
-                    )
-                else:
-                    (
-                        points1_2d,
-                        points2_2d,
-                        im_1_c,
-                        im_2_c,
-                        time_taken,
-                        num_patches,
-                        descriptor_vectors,
-                    ) = find_correspondeces_fast(
-                        rgb_bn_path,
-                        rgb_live_path,
-                        config.BASE_URL,
-                        config.get_dino_config(),
-                        num_patches,
-                        descriptor_vectors,
-                        points1_2d,
-                    )
-            else:
-                points1_2d, points2_2d, im_1_c, im_2_c, time_taken = (
-                    find_correspondences(
-                        rgb_bn_path,
-                        rgb_live_path,
-                        config.BASE_URL,
-                        config.get_dino_config(),
-                    )
-                )
-
-            im_1_c.save(f"images/image1_correspondences_{counter}.png")
-            im_2_c.save(f"images/image2_correspondences_{counter}.png")
+        if config.USE_FAST_CORRESPONDENCES:
+            results = get_correspondences(
+                config,
+                counter,
+                rgb_bn_path,
+                rgb_live_path,
+                num_patches=num_patches,
+                descriptor_vectors=descriptor_vectors,
+                points1_2d=points1_2d,
+            )
+            points1_2d, points2_2d, time_taken, num_patches, descriptor_vectors = (
+                results["points1_2d"],
+                results["points2_2d"],
+                results["time_taken"],
+                results["num_patches"],
+                results["descriptor_vectors"],
+            )
         else:
-            if config.USE_FAST_CORRESPONDENCES:
-                if counter % config.RECOMPUTE_EVERY == 0:
-                    (
-                        points1_2d,
-                        points2_2d,
-                        time_taken,
-                        num_patches,
-                        descriptor_vectors,
-                    ) = find_correspondeces_fast(
-                        rgb_bn_path,
-                        rgb_live_path,
-                        config.BASE_URL,
-                        config.get_dino_config(),
-                    )
-                else:
-                    (
-                        points1_2d,
-                        points2_2d,
-                        time_taken,
-                        num_patches,
-                        descriptor_vectors,
-                    ) = find_correspondeces_fast(
-                        rgb_bn_path,
-                        rgb_live_path,
-                        config.BASE_URL,
-                        config.get_dino_config(),
-                        num_patches,
-                        descriptor_vectors,
-                        points1_2d,
-                    )
-            else:
-                points1_2d, points2_2d, time_taken = find_correspondences(
-                    rgb_bn_path,
-                    rgb_live_path,
-                    config.BASE_URL,
-                    config.get_dino_config(),
-                )
+            results = get_correspondences(
+                config, counter, rgb_bn_path, rgb_live_path
+            )
+            points1_2d, points2_2d, time_taken = (
+                results["points1_2d"],
+                results["points2_2d"],
+                results["time_taken"],
+            )
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
         points1 = env.project_to_3d(points1_2d, depth_bn)
@@ -422,7 +276,7 @@ def run_hyperparam_search():
             "load_size": {"values": [224, 240, 320, 360, 400]},
             "stride": {"values": [2, 4, 8]},
             "thresh": {"min": 0.1, "max": 0.25},
-            "err_threshold": {"min": 0.01, "max": 0.05}
+            "err_threshold": {"min": 0.01, "max": 0.05},
         },
     }
 
