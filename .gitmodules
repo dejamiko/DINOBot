@@ -1,3 +1,0 @@
-[submodule "DINOserver"]
-	path = DINOserver
-	url = git@github.com:dejamiko/DINOserver.git
