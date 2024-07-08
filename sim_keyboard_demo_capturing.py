@@ -323,7 +323,8 @@ class DemoSim(ArmEnv):
         self.recently_triggered = 10
         self.load_object()
 
-    def load_demonstration(self, filename):
+    @staticmethod
+    def load_demonstration(filename):
         """
         Load a demonstration from a file.
         :param filename: The filename of the demonstration.
@@ -331,10 +332,12 @@ class DemoSim(ArmEnv):
         """
         with open(filename, "r") as file:
             demonstration = json.load(file)
+        img = np.array(demonstration["image"], dtype=np.uint8).reshape(-1, 3)
+        img = img.reshape(int(np.sqrt(img.shape[0])), -1, 3)
+        depth = np.array(demonstration["depth_buffer"])
         data = {
-            "rgb_bn": np.array(demonstration["image"], dtype=np.uint8).reshape(
-                self.config.LOAD_SIZE, self.config.LOAD_SIZE, 3),
-            "depth_bn": np.array(demonstration["depth_buffer"]).reshape(self.config.LOAD_SIZE, -1),
+            "rgb_bn": img,
+            "depth_bn": depth,
             "demo_vels": demonstration["recorded_data"]
         }
         return data

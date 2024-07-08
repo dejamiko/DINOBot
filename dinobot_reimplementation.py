@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import requests
 import torch
+import torchvision.transforms.functional as F
 from PIL import Image
 
 from config import Config
@@ -195,6 +196,16 @@ def deploy_dinobot(env, data, config):
         data["depth_bn"],
         data["demo_vels"],
     )
+    # transform the images to match the necessary shapes
+    rgb_bn = torch.tensor(rgb_bn).swapaxes(0, 1).swapaxes(0, 2)
+    depth_bn = torch.tensor(depth_bn).unsqueeze(0)
+
+    rgb_bn = F.resize(rgb_bn, config.LOAD_SIZE)
+    depth_bn = F.resize(depth_bn, config.LOAD_SIZE)
+
+    rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
+    depth_bn = depth_bn.squeeze(0).numpy()
+
     rgb_bn_path = save_rgb_image(rgb_bn, "bn")
     error = np.inf
     counter = 0
