@@ -114,6 +114,8 @@ def find_correspondences_fast_locally(
             results["points1"],
             results["points2"],
             results["time_taken"],
+            results["num_patches"],
+            results["descriptor_vectors"],
             results["image1_correspondences"],
             results["image2_correspondences"],
         )
@@ -121,6 +123,8 @@ def find_correspondences_fast_locally(
         results["points1"],
         results["points2"],
         results["time_taken"],
+        results["num_patches"],
+        results["descriptor_vectors"],
     )
 
 
