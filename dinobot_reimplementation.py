@@ -7,12 +7,14 @@ processes.
 import json
 import os
 import shutil
+import time
 
 import cv2
 import numpy as np
 import requests
 import torch
 import torchvision.transforms.functional as F
+import wandb
 from PIL import Image
 
 from config import Config
@@ -386,29 +388,69 @@ def run_dino_once(config):
     return success
 
 
-if __name__ == "__main__":
-    config = Config()
+def run_fast_and_slow(config):
     config.VERBOSITY = 0
     config.USE_GUI = False
     config.USE_FAST_CORRESPONDENCES = True
     num_of_runs = 10
-    successes = 0
+    successes_1 = 0
     for i in range(num_of_runs):
         config.SEED = i
         success = run_dino_once(config)
-        print(f"Success: {success}")
         if success:
-            successes += 1
-
-    print(f"Success rate: {successes}/{num_of_runs} with fast correspondences")
+            successes_1 += 1
 
     config.USE_FAST_CORRESPONDENCES = False
-    successes = 0
+    successes_2 = 0
     for i in range(num_of_runs):
         config.SEED = i
         success = run_dino_once(config)
-        print(f"Success: {success}")
         if success:
-            successes += 1
+            successes_2 += 1
+    return successes_1 + successes_2
 
-    print(f"Success rate: {successes}/{num_of_runs} with normal correspondences")
+
+def run_hyperparam_search():
+    wandb.login(key="8d9dd70311672d46669adf913d75468f2ba2095b")
+
+    sweep_config = {
+        "name": "dinobot",
+        "method": "bayes",
+        "metric": {"name": "successes", "goal": "maximize"},
+        "parameters": {
+            "load_size": {"values": [224, 240, 320, 360, 400]},
+            "stride": {"values": [2, 4, 8]},
+            "thresh": {"min": 0.1, "max": 0.25},
+            "err_threshold": {"min": 0.01, "max": 0.05}
+        },
+    }
+
+    sweep_id = wandb.sweep(sweep_config, project="dinobot")
+
+    def train(w_config=None):
+        with wandb.init(config=w_config):
+            w_config = wandb.config
+            c = Config()
+
+            c.LOAD_SIZE = w_config["load_size"]
+            c.STRIDE = w_config["stride"]
+            c.THRESH = w_config["thresh"]
+            c.ERR_THRESHOLD = w_config["err_threshold"]
+
+            wandb.log({"config": c.__dict__})
+            print(f"Config: {c.__dict__}")
+
+            start_time = time.time()
+
+            successes = run_fast_and_slow(c)
+
+            wandb.log({"successes": successes, "time_taken": time.time() - start_time})
+            return successes
+
+    wandb.agent(sweep_id, train, count=1)
+
+    wandb.finish()
+
+
+if __name__ == "__main__":
+    run_hyperparam_search()
