@@ -15,10 +15,11 @@ import torch
 import torchvision.transforms.functional as F
 
 from config import Config
-from dino_features import get_correspondences
+from connector import get_correspondences
 from sim_keyboard_demo_capturing import DemoSim
 
 
+# TODO try to implement the version with reduced DOF (just x, y, and yaw)
 def find_transformation(X, Y, config):
     """
     Inputs: X, Y: lists of 3D points

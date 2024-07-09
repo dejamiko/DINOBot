@@ -27,9 +27,9 @@ def find_correspondences(image_path1, image_path2, url, config):
             return (
                 parsed_response["points1"],
                 parsed_response["points2"],
+                parsed_response["time_taken"],
                 image1_correspondences,
                 image2_correspondences,
-                parsed_response["time_taken"],
             )
         return (
             parsed_response["points1"],
@@ -40,7 +40,7 @@ def find_correspondences(image_path1, image_path2, url, config):
         print(response.json())
 
 
-def find_correspondeces_fast(
+def find_correspondences_fast(
     image_path1,
     image_path2,
     url,
@@ -77,11 +77,11 @@ def find_correspondeces_fast(
             return (
                 parsed_response["points1"],
                 parsed_response["points2"],
-                image1_correspondences,
-                image2_correspondences,
                 parsed_response["time_taken"],
                 parsed_response["num_patches"],
                 parsed_response["descriptor_vectors"],
+                image1_correspondences,
+                image2_correspondences,
             )
         return (
             parsed_response["points1"],
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     }
 
     # Get correspondences
-    points1, points2, img1_c, img2_c, time_taken = find_correspondences(
+    points1, points2, time_taken, img1_c, img2_c = find_correspondences(
         image1, image2, url, config
     )
     print("Time taken:", time_taken)
@@ -166,20 +166,20 @@ if __name__ == "__main__":
     config["draw"] = True
 
     # Get correspondences fast
-    points1, points2, img1_c, img2_c, time_taken, num_patches, descriptor_vectors = (
-        find_correspondeces_fast(image1, image2, url, config)
+    points1, points2, time_taken, num_patches, descriptor_vectors, img1_c, img2_c = (
+        find_correspondences_fast(image1, image2, url, config)
     )
     print("Time taken:", time_taken)
 
     (
         points1_2,
         points2_2,
-        img1_c_2,
-        img2_c_2,
         time_taken,
         num_patches,
         descriptor_vectors,
-    ) = find_correspondeces_fast(
+        img1_c_2,
+        img2_c_2,
+    ) = find_correspondences_fast(
         image1, image2, url, config, num_patches, descriptor_vectors, points1
     )
     print("Time taken:", time_taken)
@@ -193,12 +193,12 @@ if __name__ == "__main__":
     config["draw"] = False
 
     points1_a, points2_a, time_taken, num_patches_a, descriptor_vectors_a = (
-        find_correspondeces_fast(image1, image2, url, config)
+        find_correspondences_fast(image1, image2, url, config)
     )
     print("Time taken:", time_taken)
 
     points1_2_a, points2_2_a, time_taken, num_patches_a, descriptor_vectors_a = (
-        find_correspondeces_fast(
+        find_correspondences_fast(
             image1, image2, url, config, num_patches_a, descriptor_vectors_a, points1_a
         )
     )
