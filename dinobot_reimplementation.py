@@ -67,6 +67,7 @@ def save_rgb_image(image, filename, image_directory):
     Take a picture with the wrist camera and save it to disk.
     :param image: The image to save
     :param filename: The filename to save the image as
+    :param image_directory: The directory where the image should be saved
     :return: The path to the saved image
     """
     # first see if there already is an image with the same name
@@ -239,21 +240,24 @@ def calculate_object_similarities(config):
 
 
 def run_dino_once(config):
-    # Remove all images from the working directory
-    image_directory = set_up_images_directory(config)
+    try:
+        image_directory = set_up_images_directory(config)
 
-    # RECORD DEMO:
-    env = DemoSim(config)
-    # for now, just load the latest demo
-    data = env.load_demonstration("demonstrations/demonstration_000.json")
+        # RECORD DEMO:
+        env = DemoSim(config)
+        # for now, just load the latest demo
+        data = env.load_demonstration("demonstrations/demonstration_000.json")
 
-    # TEST TIME DEPLOYMENT
-    # Move/change the object and move the end-effector to the home (or a random) pose.
-    env.reset()
-    # load a new object
-    success = deploy_dinobot(env, data, config, image_directory)
-    env.disconnect()
-    clear_images(image_directory)
+        # TEST TIME DEPLOYMENT
+        # Move/change the object and move the end-effector to the home (or a random) pose.
+        env.reset()
+        # load a new object
+        success = deploy_dinobot(env, data, config, image_directory)
+        env.disconnect()
+        clear_images(image_directory)
+    except Exception as e:
+        print(e)
+        return False
     return success
 
 
@@ -269,6 +273,8 @@ def run_fast_and_slow(config):
         if success:
             successes_1 += 1
 
+    print(f"Successes fast {successes_1}")
+
     config.USE_FAST_CORRESPONDENCES = False
     successes_2 = 0
     for i in range(num_of_runs):
@@ -276,6 +282,9 @@ def run_fast_and_slow(config):
         success = run_dino_once(config)
         if success:
             successes_2 += 1
+
+    print(f"Successes slow {successes_2}")
+
     return successes_1 + successes_2
 
 
@@ -288,7 +297,7 @@ def run_hyperparam_search():
         "metric": {"name": "successes", "goal": "maximize"},
         "parameters": {
             "load_size": {"values": [224, 240, 320, 360, 400]},
-            "stride": {"values": [2, 4, 8]},
+            "stride": {"values": [4, 8]},
             "thresh": {"min": 0.1, "max": 0.25},
             "err_threshold": {"min": 0.01, "max": 0.05},
         },
@@ -316,7 +325,7 @@ def run_hyperparam_search():
             wandb.log({"successes": successes, "time_taken": time.time() - start_time})
             return successes
 
-    wandb.agent(sweep_id, train, count=1)
+    wandb.agent(sweep_id, train, count=5)
 
     wandb.finish()
 
