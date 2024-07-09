@@ -25,7 +25,7 @@ class Config:
     MODEL_TYPE = "dino_vits8"
     STRIDE = 4
     PATCH_SIZE = 8
-    DEVICE = "cuda"
+    DEVICE = "cpu"
 
     # Simulation constants
     USE_GUI = True
