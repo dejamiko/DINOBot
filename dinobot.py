@@ -161,9 +161,7 @@ def deploy_dinobot(env, data, config, image_directory):
                 results["descriptor_vectors"],
             )
         else:
-            results = get_correspondences(
-                config, counter, rgb_bn_path, rgb_live_path
-            )
+            results = get_correspondences(config, counter, rgb_bn_path, rgb_live_path)
             points1_2d, points2_2d, time_taken = (
                 results["points1_2d"],
                 results["points2_2d"],
@@ -263,7 +261,8 @@ def run_dino_once(config, demo_path):
 if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 1
-    config.USE_GUI = False
+    config.USE_GUI = True
+    config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     success = run_dino_once(config, "demonstrations/demonstration_001.json")
     print(f"Finished running with success = {success}")

@@ -8,7 +8,10 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 from PIL import Image
-from .dino_vit_features.correspondences import find_correspondences, draw_correspondences
+from .dino_vit_features.correspondences import (
+    find_correspondences,
+    draw_correspondences,
+)
 from flask import Flask, request, jsonify
 from transformers import AutoModel, AutoImageProcessor
 
@@ -57,6 +60,7 @@ def correspondences_fast():
                 results["image2_correspondences"]
             ).tolist()
 
+        return jsonify(results)
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500

@@ -10,13 +10,9 @@ from DINOserver.dino_vit_features.extractor import ViTExtractor
 
 def find_correspondences(image_path1, image_path2, url, dino_config):
     if dino_config["run_locally"]:
-        return find_correspondences_locally(
-            image_path1, image_path2, dino_config
-        )
+        return find_correspondences_locally(image_path1, image_path2, dino_config)
     else:
-        return find_correspondences_server(
-            image_path1, image_path2, url, dino_config
-        )
+        return find_correspondences_server(image_path1, image_path2, url, dino_config)
 
 
 def find_correspondences_locally(image_path1, image_path2, dino_config):
@@ -111,7 +107,13 @@ def find_correspondences_fast_locally(
         dino_config["model_type"], dino_config["stride"], device=dino_config["device"]
     )
     results = correspondences_fast_backend(
-        dino_config, image_path1, image_path2, num_patches, descriptor_vectors, points1, extractor
+        dino_config,
+        image_path1,
+        image_path2,
+        num_patches,
+        descriptor_vectors,
+        points1,
+        extractor,
     )
     if dino_config["draw"]:
         return (

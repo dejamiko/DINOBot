@@ -137,7 +137,9 @@ class DemoSim(ArmEnv):
             return
         self.recording = True
         pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
-        self.recording_start_pos_and_rot = np.array(pos), np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
+        self.recording_start_pos_and_rot = np.array(pos), np.array(
+            p.getMatrixFromQuaternion(rot)
+        ).reshape(3, 3)
         self.index = 0
         # display "Recording" on the screen
         self.objects["recording_text"] = p.addUserDebugText(
@@ -205,11 +207,13 @@ class DemoSim(ArmEnv):
 
             f_pos, f_rot = self.recording_start_pos_and_rot
 
-            self.recorded_data.append((
-                (np.array(pos) - f_pos).tolist(),
-                (rot @ np.linalg.inv(f_rot)).tolist(),
-                self.gripper_open
-            ))
+            self.recorded_data.append(
+                (
+                    (np.array(pos) - f_pos).tolist(),
+                    (rot @ np.linalg.inv(f_rot)).tolist(),
+                    self.gripper_open,
+                )
+            )
         if self.recently_triggered > 0:
             self.recently_triggered -= 1
         if not self.gripper_open:
