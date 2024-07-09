@@ -296,7 +296,7 @@ def run_hyperparam_search():
         "method": "bayes",
         "metric": {"name": "successes", "goal": "maximize"},
         "parameters": {
-            "load_size": {"values": [224, 240, 320, 360, 400]},
+            "load_size": {"values": [160, 224, 240, 320, 360, 400]},
             "stride": {"values": [4, 8]},
             "thresh": {"min": 0.1, "max": 0.25},
             "err_threshold": {"min": 0.01, "max": 0.05},
