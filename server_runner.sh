@@ -6,8 +6,8 @@
 #SBATCH --nodelist=linnet
 
 
-source /vol/bitbucket/md1823/taskmaster/DINOserver/venv/bin/activate
+source /vol/bitbucket/md1823/taskmaster/DINOBot/venv/bin/activate
 
 export PYTHONUNBUFFERED=TRUE
 
-python3 -m server
+python3 -m DINOserver.server
