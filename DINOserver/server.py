@@ -180,9 +180,6 @@ def correspondences_backend(config, img1, img2):
             config["model_type"],
             config["stride"],
         )
-    # remove the saved images
-    os.remove(img1)
-    os.remove(img2)
     if config.get("draw", False):
         # draw the correspondences
         image1_correspondences, image2_correspondences = draw_correspondences(
