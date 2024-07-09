@@ -71,11 +71,15 @@ def correspondences_fast_backend(
 ):
     start_time = time.time()
     if num_patches is None or descriptor_vectors is None or points1_2d is None:
+        print(f"something is None {num_patches is None}, {descriptor_vectors is None}, {points1_2d is None}")
         descriptor_vectors, num_patches = extract_descriptors(img1, img2, config)
+        print(f"extract_desc_maps done at {time.time() - start_time}")
         descriptor_list = extract_desc_maps([img1], config, extractor)
+        print(f"extract_descriptor_nn done at {time.time() - start_time}")
         key_y, key_x = extract_descriptor_nn(
             descriptor_vectors, descriptor_list[0], num_patches, config["device"]
         )
+        print(f"extract_descriptors done at {time.time() - start_time}")
         points1_2d = [
             (int(y), int(x))
             for y, x in zip(
@@ -87,9 +91,11 @@ def correspondences_fast_backend(
         descriptor_vectors = torch.tensor(descriptor_vectors)
 
     descriptor_list = extract_desc_maps([img2], config, extractor)
+    print(f"extract_desc_maps 2 done at {time.time() - start_time}")
     key_y, key_x = extract_descriptor_nn(
         descriptor_vectors, descriptor_list[0], num_patches, config["device"]
     )
+    print(f"extract_descriptor_nn 2 done at {time.time() - start_time}")
     points2_2d = [
         (int(y), int(x))
         for y, x in zip(

@@ -10,11 +10,12 @@ def run_fast_and_slow(config):
     config.VERBOSITY = 1
     config.USE_GUI = False
     config.USE_FAST_CORRESPONDENCES = True
+    demo_path = "demonstrations/demonstration_001.json"
     num_of_runs = 10
     successes_1 = 0
     for i in range(num_of_runs):
         config.SEED = i
-        success = run_dino_once(config)
+        success = run_dino_once(config, demo_path)
         if success:
             successes_1 += 1
 
@@ -24,7 +25,7 @@ def run_fast_and_slow(config):
     successes_2 = 0
     for i in range(num_of_runs):
         config.SEED = i
-        success = run_dino_once(config)
+        success = run_dino_once(config, demo_path)
         if success:
             successes_2 += 1
 
