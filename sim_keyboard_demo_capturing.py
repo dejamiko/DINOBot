@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import pybullet as p
+from scipy.spatial.transform import Rotation
 
 from config import Config
 from sim import ArmEnv
@@ -15,6 +16,7 @@ class DemoSim(ArmEnv):
         self.index = 0
         self.gripper_open = False
         self.recording = False
+        self.recording_start_pos_and_rot = None
         self.recorded_data = []
         self.recently_triggered = 10
         self.load_object()
@@ -42,14 +44,14 @@ class DemoSim(ArmEnv):
             ord("t"): lambda: self.reset(),  # reset
         }
 
-    def fast_move(self, position, orientation):
+    def fast_move(self, position, rotation):
         """
-        Move the arm to a specific position and orientation.
+        Move the arm to a specific position and rotation.
         :param position: The position to move to.
-        :param orientation: The orientation to move to.
+        :param rotation: The rotation to move to.
         """
         joint_positions = p.calculateInverseKinematics(
-            self.objects["arm"], 11, position, orientation
+            self.objects["arm"], 11, position, rotation
         )
         p.setJointMotorControlArray(
             self.objects["arm"],
@@ -134,6 +136,8 @@ class DemoSim(ArmEnv):
         if self.recording:
             return
         self.recording = True
+        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        self.recording_start_pos_and_rot = np.array(pos), np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
         self.index = 0
         # display "Recording" on the screen
         self.objects["recording_text"] = p.addUserDebugText(
@@ -196,9 +200,16 @@ class DemoSim(ArmEnv):
             if key in self.other_key_mappings:
                 self.other_key_mappings[key]()
         if self.recording:
-            self.index += 1
-            if len(keys) > 0:
-                self.recorded_data.append((self.index, keys))
+            pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+            rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
+
+            f_pos, f_rot = self.recording_start_pos_and_rot
+
+            self.recorded_data.append((
+                (np.array(pos) - f_pos).tolist(),
+                (rot @ np.linalg.inv(f_rot)).tolist(),
+                self.gripper_open
+            ))
         if self.recently_triggered > 0:
             self.recently_triggered -= 1
         if not self.gripper_open:
@@ -268,21 +279,28 @@ class DemoSim(ArmEnv):
         self.objects["replaying_text"] = p.addUserDebugText(
             "Replaying demo", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
         )
-        current_index = 0
-        success = False
-        for index, keys in demo:
-            if self.config.VERBOSITY > 1:
-                print(f"Replaying index {index}, with keys {keys}")
-            while current_index < int(index):
-                if self.config.VERBOSITY > 1:
-                    print(f"Skipping index {current_index}")
-                current_index = self.single_frame(current_index)
-            keys = [int(k) for k in keys]
-            keys = [k for k in keys if k in self.movement_key_mappings]
-            self.control_movement_with_keys(keys)
-            success = success or self.determine_grasp_success()
 
-            current_index = self.single_frame(current_index)
+        success = False
+        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        pos = np.array(pos)
+        rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
+        for pos_delta, rot_delta, gripper_open in demo:
+            # calculate the actual position and rotation from the current one
+            new_pos = pos + pos_delta
+            new_rot = rot_delta @ rot
+            new_rot = Rotation.from_matrix(new_rot).as_quat(canonical=True)
+
+            if self.config.VERBOSITY > 1:
+                print(f"Replay, move to {new_pos}, {new_rot}")
+
+            self.fast_move(new_pos, new_rot)
+            if gripper_open:
+                self.open_gripper()
+            else:
+                self.close_gripper()
+            p.stepSimulation()
+            time.sleep(1.0 / 120.0)
+            success = success or self.determine_grasp_success()
 
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
@@ -348,15 +366,17 @@ def record_demo():
     while True:
         sim.control_arm()
         p.stepSimulation()
-        time.sleep(1.0 / 120.0)
+        time.sleep(1.0 / 240.0)
 
 
 if __name__ == "__main__":
     config = Config()
+    config.RANDOM_OBJECT_ROTATION = False
+    config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
     sim = DemoSim(config)
 
     # record_demo()
 
-    data = sim.load_demonstration("demonstrations/demonstration_000.json")
+    data = sim.load_demonstration("demonstrations/demonstration_001.json")
     sim.replay_demo(data["demo_vels"])

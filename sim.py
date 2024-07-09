@@ -118,9 +118,12 @@ class ArmEnv(Environment):
         for i in range(50):
             p.stepSimulation()
 
-        # move the arm a little bit so the camera can see the object
-        eef_pos, _ = p.getLinkState(self.objects["arm"], 11)[:2]
-        pos = [x_base, y_base, eef_pos[2]]
+        # move the arm so the camera can see the object
+        eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
+        if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
+            pos = [pos_x, pos_y, eef_pos[2]]
+        else:
+            pos = [x_base, y_base, eef_pos[2]]
         self.move_to_target_position_and_orientation(pos)
 
     def move_to_target_position_and_orientation(

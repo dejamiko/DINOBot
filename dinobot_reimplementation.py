@@ -256,7 +256,7 @@ def run_dino_once(config):
         env.disconnect()
         clear_images(image_directory)
     except Exception as e:
-        print(e)
+        print(f"Exception raised {e}")
         return False
     return success
 
