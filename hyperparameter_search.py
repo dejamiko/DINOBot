@@ -71,7 +71,7 @@ def run_hyperparam_search():
             wandb.log({"successes": successes, "time_taken": time.time() - start_time})
             return successes
 
-    wandb.agent(sweep_id, train, count=5)
+    wandb.agent(sweep_id, train, count=10)
 
     wandb.finish()
 
