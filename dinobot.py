@@ -19,35 +19,41 @@ from connector import get_correspondences
 from sim_keyboard_demo_capturing import DemoSim
 
 
-# TODO try to implement the version with reduced DOF (just x, y, and yaw)
-def find_transformation(X, Y, config):
+def find_transformation(x, y, config):
     """
-    Inputs: X, Y: lists of 3D points
-    Outputs: R - 3x3 rotation matrix, t - 3-dim translation array.
     Find transformation given two sets of correspondences between 3D points.
+    :param x: the first set of points
+    :param y: the second set of points
+    :param config: The configuration used
+    :return: R - 3x3 rotation matrix, t - 3-dim translation array.
     """
     # Calculate centroids
-    cX = np.mean(X, axis=0)
-    cY = np.mean(Y, axis=0)
+    x_centroid = np.mean(x, axis=0)
+    y_centroid = np.mean(y, axis=0)
     # Subtract centroids to obtain centered sets of points
-    Xc = X - cX
-    Yc = Y - cY
-    # Calculate covariance matrix
-    C = np.dot(Xc.T, Yc)
+    x_centered = x - x_centroid
+    y_centered = y - y_centroid
+    # Calculate covariance matrix in 2D
+    covariance_2d = np.dot(x_centered[:, :2].T, y_centered[:, :2])
     # Compute SVD
-    U, S, Vt = np.linalg.svd(C)
-    # Determine rotation matrix
-    R = np.dot(Vt.T, U.T)
+    U, S, Vt = np.linalg.svd(covariance_2d)
+    # Determine the rotation matrix in 2d
+    R_2d = np.dot(Vt.T, U.T)
 
     # Code taken from https://nghiaho.com/?page_id=671
-    if np.linalg.det(R) < 0:
+    if np.linalg.det(R_2d) < 0:
         if config.VERBOSITY > 0:
             print("det(R) < 0, reflection detected")
         Vt[2, :] *= -1
-        R = Vt.T @ U.T
+        R_2d = Vt.T @ U.T
 
-    # Determine translation vector
-    t = cY - np.dot(R, cX)
+    # Create the full rotation matrix
+    R = np.eye(3)
+    R[:2, :2] = R_2d
+
+    # Determine the translation vector
+    t = y_centroid - np.dot(R, x_centroid)
+
     return R, t
 
 
@@ -255,14 +261,16 @@ def run_dino_once(config, demo_path):
         clear_images(image_directory)
     except Exception as e:
         print(f"Exception raised {e}")
+        if config.DEBUG:
+            raise e
         return False
     return success
 
 
 if __name__ == "__main__":
     config = Config()
-    config.VERBOSITY = 1
-    config.USE_GUI = True
+    config.VERBOSITY = 0
+    config.USE_GUI = False
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     success = run_dino_once(config, "demonstrations/demonstration_001.json")

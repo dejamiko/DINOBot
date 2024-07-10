@@ -3,6 +3,7 @@ import numpy as np
 
 class Config:
     SEED = 0
+    DEBUG = False
     # DINOBot deployment constants
     ERR_THRESHOLD = 0.02
     IMAGE_DIR = "images/"
