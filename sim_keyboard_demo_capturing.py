@@ -270,7 +270,7 @@ class DemoSim(ArmEnv):
         demo = f"{directory}demonstration_{str(i).zfill(3)}.json"
         if self.config.VERBOSITY > 1:
             print(f"Replaying demo {demo}")
-        data = self.load_demonstration(demo)["demo_vels"]
+        data = self.load_demonstration(demo)["demo_velocities"]
         self.replay_demo(data)
 
     def replay_demo(self, demo):
@@ -350,7 +350,7 @@ class DemoSim(ArmEnv):
         data = {
             "rgb_bn": img,
             "depth_bn": depth,
-            "demo_vels": demonstration["recorded_data"],
+            "demo_velocities": demonstration["recorded_data"],
         }
         return data
 
@@ -382,5 +382,7 @@ if __name__ == "__main__":
 
     # record_demo()
 
+    # TODO add some test for this (perhaps just demo replay with known success rates?)
+
     data = sim.load_demonstration("demonstrations/demonstration_001.json")
-    sim.replay_demo(data["demo_vels"])
+    sim.replay_demo(data["demo_velocities"])

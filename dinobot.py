@@ -12,14 +12,24 @@ import cv2
 import numpy as np
 import requests
 import torch
-import torchvision.transforms.functional as F
+import torchvision.transforms.functional as f
+from scipy.spatial.transform import Rotation
 
 from config import Config
 from connector import get_correspondences
 from sim_keyboard_demo_capturing import DemoSim
 
 
-def find_transformation(x, y, config):
+def find_transformation(x, y):
+    R = Rotation.align_vectors(x, y)[0].as_matrix()
+    t = np.mean(y, axis=0) - np.dot(R, np.mean(x, axis=0))
+
+    assert np.allclose(np.linalg.det(R), 1), "Expected the rotation matrix to describe a rigid transform"
+
+    return R, t
+
+
+def find_transformation_lower_DOF(x, y, config):
     """
     Find transformation given two sets of correspondences between 3D points.
     :param x: the first set of points
@@ -53,6 +63,8 @@ def find_transformation(x, y, config):
 
     # Determine the translation vector
     t = y_centroid - np.dot(R, x_centroid)
+
+    assert np.allclose(np.linalg.det(R), 1), "Expected the rotation matrix to describe a rigid transform"
 
     return R, t
 
@@ -125,17 +137,17 @@ def deploy_dinobot(env, data, config, image_directory):
     :param config: The configuration object
     :param image_directory: The base image directory
     """
-    rgb_bn, depth_bn, demo_vels = (
+    rgb_bn, depth_bn, demo_velocities = (
         data["rgb_bn"],
         data["depth_bn"],
-        data["demo_vels"],
+        data["demo_velocities"],
     )
     # transform the images to match the necessary shapes
     rgb_bn = torch.tensor(rgb_bn).swapaxes(0, 1).swapaxes(0, 2)
     depth_bn = torch.tensor(depth_bn).unsqueeze(0)
 
-    rgb_bn = F.resize(rgb_bn, config.LOAD_SIZE)
-    depth_bn = F.resize(depth_bn, config.LOAD_SIZE)
+    rgb_bn = f.resize(rgb_bn, config.LOAD_SIZE)
+    depth_bn = f.resize(depth_bn, config.LOAD_SIZE)
 
     rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
     depth_bn = depth_bn.squeeze(0).numpy()
@@ -187,7 +199,7 @@ def deploy_dinobot(env, data, config, image_directory):
             break
 
         # Find rigid translation and rotation that aligns the points by minimising error, using SVD.
-        R, t = find_transformation(points1, points2, config)
+        R, t = find_transformation_lower_DOF(points1, points2, config)
 
         # Move robot
         env.move_in_camera_frame(t, R)
@@ -198,7 +210,7 @@ def deploy_dinobot(env, data, config, image_directory):
             return False
 
     # Once error is small enough, replay demo.
-    return env.replay_demo(demo_vels)
+    return env.replay_demo(demo_velocities)
 
 
 def get_embeddings(image_path, url):
@@ -221,8 +233,8 @@ def get_embeddings(image_path, url):
 
 def calculate_object_similarities(config):
     """
-    Calculate the similarities between all images in a directory using the embeddings from the DINO server and the cosine
-    similarity metric.
+    Calculate the similarities between all images in a directory using the embeddings from the DINO server and the
+    cosine similarity metric.
     :param config: The configuration object
     :return: A dictionary containing the similarities between all pairs of images
     """

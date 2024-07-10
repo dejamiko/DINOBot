@@ -1,5 +1,8 @@
+import os
+
 import numpy as np
 import pybullet as p
+from pybullet_object_models import ycb_objects
 
 from config import Config
 from sim import ArmEnv
@@ -11,6 +14,15 @@ def move_to_home(func):
         env.move_arm_to_home_position()
         func(*args, **kwargs)
         env.move_arm_to_home_position()
+
+    return wrapper
+
+
+def reset(func):
+    def wrapper(*args, **kwargs):
+        env = args[0]
+        func(*args, **kwargs)
+        env.reset()
 
     return wrapper
 
@@ -33,9 +45,19 @@ def test_move_and_rotate(env):
     )
 
 
+@reset
 @move_to_home
-def test_load_object(env):
+def test_load_normal_pybullet_objects(env):
     env.load_object("objects/mug.urdf")
+
+
+@reset
+@move_to_home
+def test_load_pybullet_object_models(env):
+    print(ycb_objects.getDataPath())
+    obj_name = "YcbBanana"
+    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    env.load_object(path_to_urdf)
 
 
 if __name__ == "__main__":
@@ -44,4 +66,5 @@ if __name__ == "__main__":
     environment = ArmEnv(config)
 
     test_move_and_rotate(environment)
-    test_load_object(environment)
+    test_load_normal_pybullet_objects(environment)
+    test_load_pybullet_object_models(environment)
