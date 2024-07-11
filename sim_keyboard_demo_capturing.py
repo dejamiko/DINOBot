@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import pybullet as p
+from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -11,15 +12,15 @@ from sim import ArmEnv
 
 
 class DemoSim(ArmEnv):
-    def __init__(self, task_name):
-        super(DemoSim, self).__init__(task_name)
-        self.index = 0
+    def __init__(self, config, object_path):
+        super(DemoSim, self).__init__(config)
         self.gripper_open = False
+        self.object_path = object_path
         self.recording = False
         self.recording_start_pos_and_rot = None
         self.recorded_data = []
         self.recently_triggered = 10
-        self.load_object()
+        self.load_object(self.object_path)
         self.movement_key_mappings = {
             ord("s"): lambda: (0.01, 0, 0),  # positive x
             ord("x"): lambda: (-0.01, 0, 0),  # negative x
@@ -140,7 +141,6 @@ class DemoSim(ArmEnv):
         self.recording_start_pos_and_rot = np.array(pos), np.array(
             p.getMatrixFromQuaternion(rot)
         ).reshape(3, 3)
-        self.index = 0
         # display "Recording" on the screen
         self.objects["recording_text"] = p.addUserDebugText(
             "Recording", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
@@ -333,7 +333,7 @@ class DemoSim(ArmEnv):
         self.recording = False
         self.recorded_data = []
         self.recently_triggered = 10
-        self.load_object()
+        self.load_object(self.object_path)
 
     @staticmethod
     def load_demonstration(filename):
@@ -378,11 +378,11 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
-    sim = DemoSim(config)
+    obj_name = "YcbBanana"
+    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    sim = DemoSim(config, path_to_urdf)
 
-    # record_demo()
+    record_demo()
 
-    # TODO add some test for this (perhaps just demo replay with known success rates?)
-
-    data = sim.load_demonstration("demonstrations/demonstration_001.json")
-    sim.replay_demo(data["demo_velocities"])
+    # data = sim.load_demonstration("demonstrations/demonstration_001.json")
+    # sim.replay_demo(data["demo_velocities"])

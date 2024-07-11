@@ -140,6 +140,7 @@ def get_correspondences(config, counter, rgb_bn_path, rgb_live_path, **kwargs):
 
 
 if __name__ == "__main__":
+    # Note, this assumes a server is running
     config = Config()
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = False

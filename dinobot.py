@@ -1,9 +1,3 @@
-"""
-This is a reimplementation of the DINOBot algorithm. It allows for (hopefully) effortless swapping in different
-environments. A server running the DINO model is used to offload the feature extraction and correspondence finding
-processes.
-"""
-
 import os
 import shutil
 import time
@@ -13,25 +7,49 @@ import numpy as np
 import requests
 import torch
 import torchvision.transforms.functional as f
-from scipy.spatial.transform import Rotation
 
 from config import Config
 from connector import get_correspondences
 from sim_keyboard_demo_capturing import DemoSim
 
 
-def find_transformation(x, y):
-    R = Rotation.align_vectors(x, y)[0].as_matrix()
-    t = np.mean(y, axis=0) - np.dot(R, np.mean(x, axis=0))
+def find_transformation(x, y, config):
+    """
+    Find transformation given two sets of correspondences between 3D points.
+    :param x: the first set of points
+    :param y: the second set of points
+    :param config: The configuration used
+    :return: R - 3x3 rotation matrix, t - 3-dim translation array.
+    """
+    # Calculate centroids
+    x_centroid = np.mean(x, axis=0)
+    y_centroid = np.mean(y, axis=0)
+    # Subtract centroids to obtain centered sets of points
+    x_centered = x - x_centroid
+    y_centered = y - y_centroid
+    # Calculate covariance matrix
+    covariance = np.dot(x_centered.T, y_centered)
+    # Compute SVD
+    U, S, Vt = np.linalg.svd(covariance)
+    # Determine rotation matrix
+    R = np.dot(Vt.T, U.T)
 
-    assert np.allclose(np.linalg.det(R), 1), "Expected the rotation matrix to describe a rigid transform"
+    # Code taken from https://nghiaho.com/?page_id=671
+    if np.linalg.det(R) < 0:
+        if config.VERBOSITY > 0:
+            print("det(R) < 0, reflection detected")
+        Vt[2, :] *= -1
+        R = Vt.T @ U.T
 
+    # Determine translation vector
+    t = y_centroid - np.dot(R, x_centroid)
     return R, t
 
 
 def find_transformation_lower_DOF(x, y, config):
     """
-    Find transformation given two sets of correspondences between 3D points.
+    Find transformation given two sets of correspondences between 3D points. Lower the degrees of freedom to only be
+    x, y, and yaw.
     :param x: the first set of points
     :param y: the second set of points
     :param config: The configuration used
@@ -102,7 +120,8 @@ def save_rgb_image(image, filename, image_directory):
 
 def clear_images(image_directory):
     """
-    Clear all images from the working directory
+    Clear all images from the working directory and the directory itself.
+    This is only used as temporary storage anyway.
     """
     if not os.path.exists(image_directory):
         os.makedirs(image_directory)
@@ -115,6 +134,7 @@ def clear_images(image_directory):
                 shutil.rmtree(file_path)
         except Exception as e:
             print("Failed to delete %s. Reason: %s" % (file_path, e))
+    os.removedirs(image_directory)
 
 
 def set_up_images_directory(config):
@@ -260,7 +280,7 @@ def run_dino_once(config, demo_path):
         image_directory = set_up_images_directory(config)
 
         # RECORD DEMO:
-        env = DemoSim(config)
+        env = DemoSim(config, "jenga/jenga.urdf")
         # for now, just load the latest demo
         data = env.load_demonstration(demo_path)
 
