@@ -4,6 +4,7 @@ import numpy as np
 class Config:
     SEED = 0
     DEBUG = False
+
     # DINOBot deployment constants
     ERR_THRESHOLD = 0.02
     IMAGE_DIR = "images/"
@@ -17,6 +18,7 @@ class Config:
     TRIES_LIMIT = 100
     RUN_LOCALLY = True
 
+    # DINO constants
     NUM_PAIRS = 8
     LOAD_SIZE = 224
     LAYER = 9
@@ -38,7 +40,7 @@ class Config:
     ARM_HOME_POSITION = (0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0, 0, 0, 0, 0)
     OBJECT_X_Y_Z_BASE = (0.4, 0.0, 1.3)
     DEBUG_CAMERA_VIEW = (3, 45, -40)
-    MOVE_TO_TARGET_ERROR_THRESHOLD = 0.01
+    MOVE_TO_TARGET_ERROR_THRESHOLD = 0.001
     CAMERA_FOV = 60
     CAMERA_NEAR_PLANE = 0.01
     CAMERA_FAR_PLANE = 100
@@ -50,7 +52,9 @@ class Config:
     RANDOM_OBJECT_POSITION = True
     RANDOM_OBJECT_POSITION_FOLLOWING = False
     RANDOM_OBJECT_ROTATION = True
-    MAX_STEPS = 200
+    MOVEMENT_ITERATION_MAX_STEPS = 200
+
+    DEMO_ADDITIONAL_IMAGE_ANGLE = 0.174533  # 10 degrees in radians
 
     def get_dino_config(self):
         return {

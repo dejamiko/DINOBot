@@ -158,19 +158,17 @@ def deploy_dinobot(env, data, config, image_directory):
     :param image_directory: The base image directory
     """
     rgb_bn, depth_bn, demo_velocities = (
-        data["rgb_bn"],
-        data["depth_bn"],
+        data["rgb_bn"][0],
+        data["depth_bn"][0],
         data["demo_velocities"],
     )
-    # transform the images to match the necessary shapes
-    rgb_bn = torch.tensor(rgb_bn).swapaxes(0, 1).swapaxes(0, 2)
-    depth_bn = torch.tensor(depth_bn).unsqueeze(0)
 
-    rgb_bn = f.resize(rgb_bn, config.LOAD_SIZE)
-    depth_bn = f.resize(depth_bn, config.LOAD_SIZE)
+    # additionally save the images
+    for im, dp in zip(data["rgb_bn"], data["depth_bn"]):
+        _, im = transform_images(config, dp, im)
+        save_rgb_image(im, "bn_add", image_directory)
 
-    rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
-    depth_bn = depth_bn.squeeze(0).numpy()
+    depth_bn, rgb_bn = transform_images(config, depth_bn, rgb_bn)
 
     rgb_bn_path = save_rgb_image(rgb_bn, "bn", image_directory)
     error = np.inf
@@ -231,6 +229,17 @@ def deploy_dinobot(env, data, config, image_directory):
 
     # Once error is small enough, replay demo.
     return env.replay_demo(demo_velocities)
+
+
+def transform_images(config, depth_bn, rgb_bn):
+    # transform the images to match the necessary shapes
+    rgb_bn = torch.tensor(rgb_bn).swapaxes(0, 1).swapaxes(0, 2)
+    depth_bn = torch.tensor(depth_bn).unsqueeze(0)
+    rgb_bn = f.resize(rgb_bn, config.LOAD_SIZE)
+    depth_bn = f.resize(depth_bn, config.LOAD_SIZE)
+    rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
+    depth_bn = depth_bn.squeeze(0).numpy()
+    return depth_bn, rgb_bn
 
 
 def get_embeddings(image_path, url):
@@ -305,5 +314,7 @@ if __name__ == "__main__":
     config.USE_GUI = False
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
-    success = run_dino_once(config, "demonstrations/demonstration_001.json")
+    success = run_dino_once(config, "demonstrations/demonstration_002.json")
     print(f"Finished running with success = {success}")
+
+    # TODO store results of the alignment phase to be able to run just the replay with gui

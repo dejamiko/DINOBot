@@ -12,15 +12,15 @@ from sim import ArmEnv
 
 
 class DemoSim(ArmEnv):
-    def __init__(self, config, object_path):
+    def __init__(self, config, object_path, scale=1.0):
         super(DemoSim, self).__init__(config)
         self.gripper_open = False
-        self.object_path = object_path
+        self.object_info = (object_path, scale)
         self.recording = False
         self.recording_start_pos_and_rot = None
         self.recorded_data = []
         self.recently_triggered = 10
-        self.load_object(self.object_path)
+        self.load_object(*self.object_info)
         self.movement_key_mappings = {
             ord("s"): lambda: (0.01, 0, 0),  # positive x
             ord("x"): lambda: (-0.01, 0, 0),  # negative x
@@ -146,8 +146,10 @@ class DemoSim(ArmEnv):
             "Recording", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
         )
         self.recorded_data = []
-        img, depth_buffer = self.get_rgbd_image()
-        self.recorded_data.append((img, depth_buffer))
+        images, depth_buffers = self.take_demo_images()
+        self.recorded_data.append(len(images))
+        for img, depth in zip(images, depth_buffers):
+            self.recorded_data.append((img, depth))
 
     def stop_recording(self):
         """
@@ -167,13 +169,21 @@ class DemoSim(ArmEnv):
                 break
             i += 1
         with open(filename, "w") as f:
-            # remove the first frame as it is the images
-            img, depth_buffer = self.recorded_data.pop(0)
+            # the first frame contains the number of images taken
+            num_images = self.recorded_data.pop(0)
+            images = []
+            depth_buffers = []
+            # we then get all the images
+            for i in range(num_images):
+                img, depth_buffer = self.recorded_data.pop(0)
+                images.append(img.tolist())
+                depth_buffers.append(depth_buffer.tolist())
+            # the rest of the recorded data is movement in every frame
             json.dump(
                 {
                     "recorded_data": self.recorded_data,
-                    "image": img.tolist(),
-                    "depth_buffer": depth_buffer.tolist(),
+                    "images": images,
+                    "depth_buffers": depth_buffers
                 },
                 f,
             )
@@ -256,21 +266,20 @@ class DemoSim(ArmEnv):
         if self.recently_triggered > 0:
             return
 
-        # find the last recorded demo by finding the highest number
+        # find the last recorded demo by inspecting the creation times
         directory = "demonstrations/"
-        i = 0
-        while True:
-            filename = f"{directory}demonstration_{str(i).zfill(3)}.json"
-            if not os.path.exists(filename):
-                break
-            i += 1
-        i -= 1
-        if i < 0:
-            raise FileNotFoundError("No recorded demos found.")
-        demo = f"{directory}demonstration_{str(i).zfill(3)}.json"
+        latest_time = 0
+        latest_path = None
+        for f in os.listdir(directory):
+            if not f.endswith(".json"):
+                continue
+            if os.path.getmtime(directory + f) > latest_time:
+                latest_time = os.path.getmtime(directory + f)
+                latest_path = directory + f
+
         if self.config.VERBOSITY > 1:
-            print(f"Replaying demo {demo}")
-        data = self.load_demonstration(demo)["demo_velocities"]
+            print(f"Replaying demo {latest_path}")
+        data = self.load_demonstration(latest_path)["demo_velocities"]
         self.replay_demo(data)
 
     def replay_demo(self, demo):
@@ -303,24 +312,13 @@ class DemoSim(ArmEnv):
             else:
                 self.close_gripper()
             p.stepSimulation()
-            time.sleep(1.0 / 120.0)
+            if self.config.USE_GUI:
+                time.sleep(1.0 / 2400.0)
             success = success or self.determine_grasp_success()
 
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
         return success
-
-    @staticmethod
-    def single_frame(current_index):
-        """
-        Perform a single frame in the simulation.
-        :param current_index: The current index in the simulation.
-        :return: The updated index.
-        """
-        p.stepSimulation()
-        time.sleep(1.0 / 120.0)
-        current_index += 1
-        return current_index
 
     def reset(self):
         """
@@ -333,7 +331,7 @@ class DemoSim(ArmEnv):
         self.recording = False
         self.recorded_data = []
         self.recently_triggered = 10
-        self.load_object(self.object_path)
+        self.load_object(*self.object_info)
 
     @staticmethod
     def load_demonstration(filename):
@@ -344,12 +342,15 @@ class DemoSim(ArmEnv):
         """
         with open(filename, "r") as file:
             demonstration = json.load(file)
-        img = np.array(demonstration["image"], dtype=np.uint8).reshape(-1, 3)
-        img = img.reshape(int(np.sqrt(img.shape[0])), -1, 3)
-        depth = np.array(demonstration["depth_buffer"])
+        images = demonstration["images"]
+        depth_buffers = demonstration["depth_buffers"]
+        for i in range(len(images)):
+            img = np.array(images[i], dtype=np.uint8).reshape(-1, 3)
+            images[i] = img.reshape(int(np.sqrt(img.shape[0])), -1, 3)
+            depth_buffers[i] = np.array(depth_buffers[i])
         data = {
-            "rgb_bn": img,
-            "depth_bn": depth,
+            "rgb_bn": images,
+            "depth_bn": depth_buffers,
             "demo_velocities": demonstration["recorded_data"],
         }
         return data
@@ -365,6 +366,56 @@ class DemoSim(ArmEnv):
             return False
         return True
 
+    def take_demo_images(self):
+        images, depth_buffers = [], []
+        img, depth = self.get_rgbd_image()
+        images.append(img)
+        depth_buffers.append(depth)
+        # move to 4 different viewpoints by moving an angle on a sphere in the positive and negative x and y axes
+        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        x, y, z = pos
+        roll, pitch, yaw = p.getEulerFromQuaternion(rot)
+        r = depth[len(depth) // 2][len(depth) // 2]  # the distance to the object (approximately)
+        new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
+        offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
+
+        # go in the negative x direction
+        new_pos = (x - offset, y, new_z)
+        new_rot = p.getQuaternionFromEuler((roll, pitch - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw))
+        self._move_with_debug_dot(new_pos, new_rot)
+        img, depth = self.get_rgbd_image()
+        images.append(img)
+        depth_buffers.append(depth)
+
+        # go in the positive x direction
+        new_pos = (x + offset, y, new_z)
+        new_rot = p.getQuaternionFromEuler((roll, pitch + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw))
+        self._move_with_debug_dot(new_pos, new_rot)
+        img, depth = self.get_rgbd_image()
+        images.append(img)
+        depth_buffers.append(depth)
+
+        # go in the negative y direction
+        new_pos = (x, y - offset, new_z)
+        new_rot = p.getQuaternionFromEuler((roll + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw))
+        self._move_with_debug_dot(new_pos, new_rot)
+        img, depth = self.get_rgbd_image()
+        images.append(img)
+        depth_buffers.append(depth)
+
+        # go in the positive y direction
+        new_pos = (x, y + offset, new_z)
+        new_rot = p.getQuaternionFromEuler((roll - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw))
+        self._move_with_debug_dot(new_pos, new_rot)
+        img, depth = self.get_rgbd_image()
+        images.append(img)
+        depth_buffers.append(depth)
+
+        # return to the initial position
+        self._move_with_debug_dot(pos, rot)
+
+        return images, depth_buffers
+
 
 def record_demo():
     while True:
@@ -378,11 +429,15 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
-    obj_name = "YcbBanana"
-    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # obj_name = "YcbTomatoSoupCan"
+    # path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # TODO continue onwards with objects
+    path_to_urdf = "random_urdfs/000/000.urdf"
     sim = DemoSim(config, path_to_urdf)
 
     record_demo()
 
-    # data = sim.load_demonstration("demonstrations/demonstration_001.json")
+    # data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
     # sim.replay_demo(data["demo_velocities"])
+
+    # TODO come up with 2 more tasks (hammering? pushing?)

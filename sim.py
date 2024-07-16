@@ -85,10 +85,11 @@ class ArmEnv:
         home_position = self.config.ARM_HOME_POSITION
         self._move_to_target_joint_position(home_position)
 
-    def load_object(self, object_path="jenga/jenga.urdf"):
+    def load_object(self, object_path="jenga/jenga.urdf", scale=1.0):
         """
         Load an object on the table and move the arm so the camera can see it.
         :param object_path: the path to the object URDF file
+        :param scale: The scale to be used for the object model
         """
         # load some object on the table somewhere random (within a certain range)
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
@@ -106,7 +107,7 @@ class ArmEnv:
             np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
         )
         self.objects[f"object"] = p.loadURDF(
-            object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle])
+            object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle]), globalScaling=scale
         )
         colour = np.random.uniform(0, 1, 3)
         p.changeVisualShape(
@@ -297,7 +298,7 @@ class ArmEnv:
         step = 0
         while (
                 error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD
-                and step < self.config.MAX_STEPS
+                and step < self.config.MOVEMENT_ITERATION_MAX_STEPS
         ):
             current_joint_positions = np.array(
                 [
@@ -307,12 +308,13 @@ class ArmEnv:
             )
             error = np.linalg.norm(current_joint_positions - target_joint_positions)
             p.stepSimulation()
-            if self.config.TAKE_IMAGE_AT_EVERY_STEP:
-                live_img, depth_buffer = self.get_rgbd_image()
-                if self.config.VERBOSITY > 1:
-                    self._draw_points_in_3d(live_img, depth_buffer)
-            else:
-                time.sleep(1.0 / 240.0)
+            if self.config.USE_GUI:
+                if self.config.TAKE_IMAGE_AT_EVERY_STEP:
+                    live_img, depth_buffer = self.get_rgbd_image()
+                    if self.config.VERBOSITY > 1:
+                        self._draw_points_in_3d(live_img, depth_buffer)
+                else:
+                    time.sleep(1.0 / 240.0)
             step += 1
         if self.config.VERBOSITY > 1:
             if "points_debug_3d" in self.objects:
