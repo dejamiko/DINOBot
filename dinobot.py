@@ -82,7 +82,9 @@ def find_transformation_lower_DOF(x, y, config):
     # Determine the translation vector
     t = y_centroid - np.dot(R, x_centroid)
 
-    assert np.allclose(np.linalg.det(R), 1), "Expected the rotation matrix to describe a rigid transform"
+    assert np.allclose(
+        np.linalg.det(R), 1
+    ), "Expected the rotation matrix to describe a rigid transform"
 
     return R, t
 
@@ -311,10 +313,10 @@ def run_dino_once(config, demo_path):
 if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 0
-    config.USE_GUI = False
+    config.USE_GUI = True
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
-    success = run_dino_once(config, "demonstrations/demonstration_002.json")
+    success = run_dino_once(config, "demonstrations/demonstration_banana.json")
     print(f"Finished running with success = {success}")
 
     # TODO store results of the alignment phase to be able to run just the replay with gui

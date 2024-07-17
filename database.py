@@ -1,5 +1,9 @@
 import os
+import re
 import sqlite3
+
+import pybullet_data
+from pybullet_object_models import ycb_objects
 
 from config import Config
 
@@ -53,23 +57,33 @@ class DB:
                 raise e
 
     def add_demo(self, object_name, demo_path):
-        # self._check_paths(demo_path, ".json")
+        self._check_paths(demo_path, ".json")
         # if there already exists a demo in the database with the given object name, override it
         if self.get_demo_for_object(object_name) is not None:
             with self.con as c:
-                c.execute("UPDATE demonstrations SET demo_path=? WHERE object_name=?", (demo_path, object_name))
+                c.execute(
+                    "UPDATE demonstrations SET demo_path=? WHERE object_name=?",
+                    (demo_path, object_name),
+                )
         else:
             with self.con as c:
-                c.execute("INSERT INTO demonstrations VALUES(?, ?, ?)", (None, object_name, demo_path))
+                c.execute(
+                    "INSERT INTO demonstrations VALUES(?, ?, ?)",
+                    (None, object_name, demo_path),
+                )
 
     def get_demo_for_object(self, object_name):
         # Note, those parameters are tuples with length one, otherwise the string is treated as a list of chars
-        res = self.con.execute("SELECT demo_path FROM demonstrations WHERE object_name=?", (object_name,))
+        res = self.con.execute(
+            "SELECT demo_path FROM demonstrations WHERE object_name=?", (object_name,)
+        )
         res = res.fetchone()
         return res[0] if res is not None else None
 
     def _get_object_id_by_name(self, object_name):
-        res = self.con.execute("SELECT object_id FROM demonstrations WHERE object_name=?", (object_name,))
+        res = self.con.execute(
+            "SELECT object_id FROM demonstrations WHERE object_name=?", (object_name,)
+        )
         res = res.fetchone()
         return res[0] if res is not None else None
 
@@ -77,11 +91,17 @@ class DB:
         object_1_id = self._get_object_id_by_name(object_1_name)
         object_2_id = self._get_object_id_by_name(object_2_name)
 
-        assert object_1_id is not None, f"There was no object named {object_1_name} in the database"
-        assert object_2_id is not None, f"There was no object named {object_2_name} in the database"
+        assert (
+            object_1_id is not None
+        ), f"There was no object named {object_1_name} in the database"
+        assert (
+            object_2_id is not None
+        ), f"There was no object named {object_2_name} in the database"
 
-        res = self.con.execute("SELECT success_rate FROM transfers WHERE (object_id_1=? AND object_id_2=?)",
-                               (object_1_id, object_2_id))
+        res = self.con.execute(
+            "SELECT success_rate FROM transfers WHERE (object_id_1=? AND object_id_2=?)",
+            (object_1_id, object_2_id),
+        )
         res = res.fetchone()
         return res[0] if res is not None else None
 
@@ -90,18 +110,27 @@ class DB:
         object_1_id = self._get_object_id_by_name(object_1_name)
         object_2_id = self._get_object_id_by_name(object_2_name)
 
-        assert object_1_id is not None, f"There was no object named {object_1_name} in the database"
-        assert object_2_id is not None, f"There was no object named {object_2_name} in the database"
+        assert (
+            object_1_id is not None
+        ), f"There was no object named {object_1_name} in the database"
+        assert (
+            object_2_id is not None
+        ), f"There was no object named {object_2_name} in the database"
 
         prev = self.get_success_rate_for_objects(object_1_name, object_2_name)
 
         if prev is not None:
             with self.con as c:
-                c.execute("UPDATE transfers SET success_rate=? WHERE object_id_1=? AND object_id_2=?",
-                          (success_rate, object_1_id, object_2_id))
+                c.execute(
+                    "UPDATE transfers SET success_rate=? WHERE object_id_1=? AND object_id_2=?",
+                    (success_rate, object_1_id, object_2_id),
+                )
         else:
             with self.con as c:
-                c.execute("INSERT INTO transfers VALUES(?, ?, ?)", (object_1_id, object_2_id, success_rate))
+                c.execute(
+                    "INSERT INTO transfers VALUES(?, ?, ?)",
+                    (object_1_id, object_2_id, success_rate),
+                )
 
     @staticmethod
     def _check_paths(demo_path, extension):
@@ -126,37 +155,119 @@ class DB:
                     raise e
 
     def add_urdf_info(self, object_name, urdf_path, scale):
-        # self._check_paths(urdf_path, ".urdf")
+        self._check_paths(urdf_path, ".urdf")
+
+        rel_urdf_path = os.path.relpath(urdf_path, "/Users/mikolajdeja/Coding/DINOBot")
+
         object_id = self._get_object_id_by_name(object_name)
 
-        assert object_id is not None, f"There was no object named {object_id} in the database"
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_name} in the database"
 
         prev = self.get_urdf_path(object_name)
 
         if prev is not None:
             with self.con as c:
-                c.execute("UPDATE urdf_info SET urdf_path=?, scale=? WHERE object_id=?", (urdf_path, scale, object_id))
+                c.execute(
+                    "UPDATE urdf_info SET urdf_path=?, scale=? WHERE object_id=?",
+                    (rel_urdf_path, scale, object_id),
+                )
         else:
             with self.con as c:
-                c.execute("INSERT INTO urdf_info VALUES(?, ?, ?)", (object_id, urdf_path, scale))
+                c.execute(
+                    "INSERT INTO urdf_info VALUES(?, ?, ?)",
+                    (object_id, rel_urdf_path, scale),
+                )
 
     def get_urdf_path(self, object_name):
         object_id = self._get_object_id_by_name(object_name)
 
-        assert object_id is not None, f"There was no object named {object_id} in the database"
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_id} in the database"
 
-        res = self.con.execute("SELECT urdf_path FROM urdf_info WHERE object_id=?", (object_id,))
+        res = self.con.execute(
+            "SELECT urdf_path FROM urdf_info WHERE object_id=?", (object_id,)
+        )
         res = res.fetchone()
         return res[0] if res is not None else None
 
     def get_urdf_scale(self, object_name):
         object_id = self._get_object_id_by_name(object_name)
 
-        assert object_id is not None, f"There was no object named {object_id} in the database"
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_id} in the database"
 
-        res = self.con.execute("SELECT scale FROM urdf_info WHERE object_id=?", (object_id,))
+        res = self.con.execute(
+            "SELECT scale FROM urdf_info WHERE object_id=?", (object_id,)
+        )
         res = res.fetchone()
         return res[0] if res is not None else None
+
+
+def populate_urdf_info(db):
+    # YCB objects
+    names = [
+        "YcbBanana",
+        "YcbChipsCan",
+        "YcbCrackerBox",
+        "YcbFoamBrick",
+        "YcbGelatinBox",
+        "YcbHammer",
+        "YcbMasterChefCan",
+        "YcbMediumClamp",
+        "YcbMustardBottle",
+        "YcbPear",
+        "YcbPottedMeatCan",
+        "YcbPowerDrill",
+        "YcbScissors",
+        "YcbTomatoSoupCan",
+    ]
+
+    scales = {"YcbChipsCan": 0.7}
+
+    for n in names:
+        insert_ycb_object(db, n, scales.get(n, 1.0))
+
+    # pybullet data objects
+    db.add_urdf_info(
+        "bike", os.path.join(pybullet_data.getDataPath(), "bicycle/bike.urdf"), 0.1
+    )
+    db.add_urdf_info(
+        "domino", os.path.join(pybullet_data.getDataPath(), "domino/domino.urdf"), 2.5
+    )
+    db.add_urdf_info(
+        "duck", os.path.join(pybullet_data.getDataPath(), "duck_vhacd.urdf"), 1.0
+    )
+    db.add_urdf_info(
+        "jenga", os.path.join(pybullet_data.getDataPath(), "jenga/jenga.urdf"), 1.0
+    )
+    db.add_urdf_info(
+        "mini_cheetah",
+        os.path.join(pybullet_data.getDataPath(), "mini_cheetah/mini_cheetah.urdf"),
+        0.25,
+    )
+    db.add_urdf_info(
+        "minitaur",
+        os.path.join(pybullet_data.getDataPath(), "quadruped/minitaur.urdf"),
+        0.25,
+    )
+    db.add_urdf_info(
+        "mug", os.path.join(pybullet_data.getDataPath(), "urdf/mug.urdf"), 1.0
+    )
+    db.add_urdf_info(
+        "racecar",
+        os.path.join(pybullet_data.getDataPath(), "racecar/racecar.urdf"),
+        0.2,
+    )
+
+
+def insert_ycb_object(db, obj_name, scale=1.0):
+    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    snake_case_name = re.sub(r"(?<!^)(?=[A-Z])", "_", obj_name).lower()[4:]
+    db.add_urdf_info(snake_case_name, path_to_urdf, scale)
 
 
 if __name__ == "__main__":
@@ -173,3 +284,5 @@ if __name__ == "__main__":
             continue
         object_name = "_".join(f.split("_")[1:])[:-5]
         db.add_demo(object_name, base_dir + f)
+
+    populate_urdf_info(db)

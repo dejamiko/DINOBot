@@ -107,7 +107,10 @@ class ArmEnv:
             np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
         )
         self.objects[f"object"] = p.loadURDF(
-            object_path, [pos_x, pos_y, z_base], p.getQuaternionFromEuler([0, 0, angle]), globalScaling=scale
+            object_path,
+            [pos_x, pos_y, z_base],
+            p.getQuaternionFromEuler([0, 0, angle]),
+            globalScaling=scale,
         )
         colour = np.random.uniform(0, 1, 3)
         p.changeVisualShape(
@@ -245,7 +248,7 @@ class ArmEnv:
         p.disconnect()
 
     def _move_to_target_position_and_orientation(
-            self, target_position, target_orientation=None
+        self, target_position, target_orientation=None
     ):
         """
         Move the arm to the target position.
@@ -297,8 +300,8 @@ class ArmEnv:
         error = np.inf
         step = 0
         while (
-                error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD
-                and step < self.config.MOVEMENT_ITERATION_MAX_STEPS
+            error > self.config.MOVE_TO_TARGET_ERROR_THRESHOLD
+            and step < self.config.MOVEMENT_ITERATION_MAX_STEPS
         ):
             current_joint_positions = np.array(
                 [

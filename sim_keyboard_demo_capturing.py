@@ -183,7 +183,7 @@ class DemoSim(ArmEnv):
                 {
                     "recorded_data": self.recorded_data,
                     "images": images,
-                    "depth_buffers": depth_buffers
+                    "depth_buffers": depth_buffers,
                 },
                 f,
             )
@@ -375,13 +375,17 @@ class DemoSim(ArmEnv):
         pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
         x, y, z = pos
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
-        r = depth[len(depth) // 2][len(depth) // 2]  # the distance to the object (approximately)
+        r = depth[len(depth) // 2][
+            len(depth) // 2
+        ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
         # go in the negative x direction
         new_pos = (x - offset, y, new_z)
-        new_rot = p.getQuaternionFromEuler((roll, pitch - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw))
+        new_rot = p.getQuaternionFromEuler(
+            (roll, pitch - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw)
+        )
         self._move_with_debug_dot(new_pos, new_rot)
         img, depth = self.get_rgbd_image()
         images.append(img)
@@ -389,7 +393,9 @@ class DemoSim(ArmEnv):
 
         # go in the positive x direction
         new_pos = (x + offset, y, new_z)
-        new_rot = p.getQuaternionFromEuler((roll, pitch + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw))
+        new_rot = p.getQuaternionFromEuler(
+            (roll, pitch + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw)
+        )
         self._move_with_debug_dot(new_pos, new_rot)
         img, depth = self.get_rgbd_image()
         images.append(img)
@@ -397,7 +403,9 @@ class DemoSim(ArmEnv):
 
         # go in the negative y direction
         new_pos = (x, y - offset, new_z)
-        new_rot = p.getQuaternionFromEuler((roll + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw))
+        new_rot = p.getQuaternionFromEuler(
+            (roll + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw)
+        )
         self._move_with_debug_dot(new_pos, new_rot)
         img, depth = self.get_rgbd_image()
         images.append(img)
@@ -405,7 +413,9 @@ class DemoSim(ArmEnv):
 
         # go in the positive y direction
         new_pos = (x, y + offset, new_z)
-        new_rot = p.getQuaternionFromEuler((roll - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw))
+        new_rot = p.getQuaternionFromEuler(
+            (roll - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw)
+        )
         self._move_with_debug_dot(new_pos, new_rot)
         img, depth = self.get_rgbd_image()
         images.append(img)

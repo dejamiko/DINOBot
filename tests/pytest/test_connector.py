@@ -72,7 +72,9 @@ def test_get_correspondences_fast_draw_returns_correct_results(connector_fixture
     os.remove("images/image2_correspondences_0.png")
 
 
-def test_get_correspondences_fast_no_draw_no_recalc_returns_correct_results(connector_fixture):
+def test_get_correspondences_fast_no_draw_no_recalc_returns_correct_results(
+    connector_fixture,
+):
     config, image1, image2 = connector_fixture
     config.USE_FAST_CORRESPONDENCES = True
     # run the previous one

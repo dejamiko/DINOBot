@@ -31,8 +31,16 @@ def sim_fixture():
 def test_move_arm_to_home_position(sim_fixture):
     sim, config = sim_fixture
     sim.move_arm_to_home_position()
-    assert np.allclose([x[0] for x in p.getJointStates(sim.objects["arm"], range(p.getNumJoints(sim.objects["arm"])))],
-                       config.ARM_HOME_POSITION, atol=config.MOVE_TO_TARGET_ERROR_THRESHOLD)
+    assert np.allclose(
+        [
+            x[0]
+            for x in p.getJointStates(
+                sim.objects["arm"], range(p.getNumJoints(sim.objects["arm"]))
+            )
+        ],
+        config.ARM_HOME_POSITION,
+        atol=config.MOVE_TO_TARGET_ERROR_THRESHOLD,
+    )
 
 
 def test_load_object_loads_object(sim_fixture):
