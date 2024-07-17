@@ -54,8 +54,47 @@ def test_get_success_rate_works(db_with_demos_fixture):
     assert db_with_demos_fixture.get_success_rate_for_objects("object_name1", "object_name2") == 0.1
 
 
+def test_get_success_rate_for_wrong_name_fails(db_with_demos_fixture):
+    with pytest.raises(AssertionError):
+        db_with_demos_fixture.get_success_rate_for_objects("object_name3", "object_name1")
+
+
 def test_add_transfer_for_existing_objects_updates(db_with_demos_fixture):
     db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.1)
     assert db_with_demos_fixture.get_success_rate_for_objects("object_name1", "object_name2") == 0.1
     db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.7)
     assert db_with_demos_fixture.get_success_rate_for_objects("object_name1", "object_name2") == 0.7
+
+
+def test_add_urdf_info_works(db_with_demos_fixture):
+    db_with_demos_fixture.add_urdf_info("object_name1", "urdf_path1", 1.0)
+    db_with_demos_fixture.add_urdf_info("object_name2", "urdf_path2", 1.0)
+
+
+def test_get_urdf_path_works(db_with_demos_fixture):
+    db_with_demos_fixture.add_urdf_info("object_name1", "urdf_path1", 1.0)
+    assert db_with_demos_fixture.get_urdf_path("object_name1") == "urdf_path1"
+
+
+def test_get_urdf_scale_works(db_with_demos_fixture):
+    db_with_demos_fixture.add_urdf_info("object_name1", "urdf_path1", 1.0)
+    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.0
+
+
+def test_get_urdf_path_for_wrong_name_fails(db_with_demos_fixture):
+    with pytest.raises(AssertionError):
+        db_with_demos_fixture.get_urdf_path("object_name3")
+
+
+def test_get_urdf_scale_for_wrong_name_fails(db_with_demos_fixture):
+    with pytest.raises(AssertionError):
+        db_with_demos_fixture.get_urdf_scale("object_name3")
+
+
+def test_add_urdf_info_for_existing_object_updates(db_with_demos_fixture):
+    db_with_demos_fixture.add_urdf_info("object_name1", "urdf_path1", 1.0)
+    assert db_with_demos_fixture.get_urdf_path("object_name1") == "urdf_path1"
+    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.0
+    db_with_demos_fixture.add_urdf_info("object_name1", "urdf_path2", 2.0)
+    assert db_with_demos_fixture.get_urdf_path("object_name1") == "urdf_path2"
+    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 2.0

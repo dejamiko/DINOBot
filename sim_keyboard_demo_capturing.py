@@ -431,13 +431,10 @@ if __name__ == "__main__":
     config.VERBOSITY = 0
     # obj_name = "YcbTomatoSoupCan"
     # path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    # TODO continue onwards with objects
-    path_to_urdf = "random_urdfs/000/000.urdf"
+    path_to_urdf = f"duck_vhacd.urdf"
     sim = DemoSim(config, path_to_urdf)
 
     record_demo()
 
     # data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
     # sim.replay_demo(data["demo_velocities"])
-
-    # TODO come up with 2 more tasks (hammering? pushing?)

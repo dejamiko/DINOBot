@@ -10,47 +10,57 @@ class DB:
         self.con = sqlite3.connect(name)
 
     def create_tables(self):
+        sql_string = (
+            "CREATE TABLE demonstrations"
+            "("
+            "object_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "object_name VARCHAR(50) UNIQUE NOT NULL, "
+            "demo_path VARCHAR(100) UNIQUE NOT NULL "
+            ")"
+        )
+        self._create_table("demonstrations", sql_string)
+
+        sql_string = (
+            "CREATE TABLE transfers"
+            "("
+            "object_id_1 INT NOT NULL,"
+            "object_id_2 INT NOT NULL,"
+            "success_rate FLOAT NOT NULL,"
+            "FOREIGN KEY (object_id_1) REFERENCES demonstrations(object_id),"
+            "FOREIGN KEY (object_id_2) REFERENCES demonstrations(object_id)"
+            ")"
+        )
+        self._create_table("transfers", sql_string)
+
+        sql_string = (
+            "CREATE TABLE urdf_info"
+            "("
+            "object_id INT NOT NULL,"
+            "urdf_path VARCHAR(100) NOT NULL,"
+            "scale FLOAT NOT NULL,"
+            "FOREIGN KEY (object_id) REFERENCES demonstrations(object_id)"
+            ")"
+        )
+        self._create_table("urdf_info", sql_string)
+
+    def _create_table(self, table_name, sql_string):
         try:
-            self.con.execute(
-                "CREATE TABLE demonstrations"
-                "("
-                "object_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                "object_name VARCHAR(50) UNIQUE NOT NULL, "
-                "demo_path VARCHAR(100) UNIQUE NOT NULL "
-                ")"
-            )
+            self.con.execute(sql_string)
         except sqlite3.OperationalError as e:
-            if str(e) == "table demonstrations already exists":
-                pass
-            else:
-                raise e
-        try:
-            self.con.execute(
-                "CREATE TABLE transfers"
-                "("
-                "object_id_1 INT NOT NULL,"
-                "object_id_2 INT NOT NULL,"
-                "success_rate FLOAT NOT NULL,"
-                "FOREIGN KEY (object_id_1) REFERENCES demonstrations(object_id),"
-                "FOREIGN KEY (object_id_2) REFERENCES demonstrations(object_id)"
-                ")")
-        except sqlite3.OperationalError as e:
-            if str(e) == "table transfers already exists":
+            if str(e) == f"table {table_name} already exists":
                 pass
             else:
                 raise e
 
     def add_demo(self, object_name, demo_path):
-        # self._check_paths(demo_path)
+        # self._check_paths(demo_path, ".json")
         # if there already exists a demo in the database with the given object name, override it
         if self.get_demo_for_object(object_name) is not None:
-            with self.con:
-                self.con.execute("UPDATE demonstrations SET demo_path=? WHERE object_name=?",
-                                 (demo_path, object_name))
+            with self.con as c:
+                c.execute("UPDATE demonstrations SET demo_path=? WHERE object_name=?", (demo_path, object_name))
         else:
-            with self.con:
-                self.con.execute("INSERT INTO demonstrations VALUES(?, ?, ?)",
-                                 (None, object_name, demo_path))
+            with self.con as c:
+                c.execute("INSERT INTO demonstrations VALUES(?, ?, ?)", (None, object_name, demo_path))
 
     def get_demo_for_object(self, object_name):
         # Note, those parameters are tuples with length one, otherwise the string is treated as a list of chars
@@ -86,17 +96,17 @@ class DB:
         prev = self.get_success_rate_for_objects(object_1_name, object_2_name)
 
         if prev is not None:
-            with self.con:
-                self.con.execute("UPDATE transfers SET success_rate=? WHERE object_id_1=? AND object_id_2=?",
-                                 (success_rate, object_1_id, object_2_id))
+            with self.con as c:
+                c.execute("UPDATE transfers SET success_rate=? WHERE object_id_1=? AND object_id_2=?",
+                          (success_rate, object_1_id, object_2_id))
         else:
-            with self.con:
-                self.con.execute("INSERT INTO transfers VALUES(?, ?, ?)", (object_1_id, object_2_id, success_rate))
+            with self.con as c:
+                c.execute("INSERT INTO transfers VALUES(?, ?, ?)", (object_1_id, object_2_id, success_rate))
 
     @staticmethod
-    def _check_paths(demo_path):
+    def _check_paths(demo_path, extension):
         assert os.path.isfile(demo_path)
-        assert demo_path.endswith(".json")
+        assert demo_path.endswith(extension)
 
     def remove_all_tables(self):
         with self.con:
@@ -115,6 +125,39 @@ class DB:
                 else:
                     raise e
 
+    def add_urdf_info(self, object_name, urdf_path, scale):
+        # self._check_paths(urdf_path, ".urdf")
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert object_id is not None, f"There was no object named {object_id} in the database"
+
+        prev = self.get_urdf_path(object_name)
+
+        if prev is not None:
+            with self.con as c:
+                c.execute("UPDATE urdf_info SET urdf_path=?, scale=? WHERE object_id=?", (urdf_path, scale, object_id))
+        else:
+            with self.con as c:
+                c.execute("INSERT INTO urdf_info VALUES(?, ?, ?)", (object_id, urdf_path, scale))
+
+    def get_urdf_path(self, object_name):
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert object_id is not None, f"There was no object named {object_id} in the database"
+
+        res = self.con.execute("SELECT urdf_path FROM urdf_info WHERE object_id=?", (object_id,))
+        res = res.fetchone()
+        return res[0] if res is not None else None
+
+    def get_urdf_scale(self, object_name):
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert object_id is not None, f"There was no object named {object_id} in the database"
+
+        res = self.con.execute("SELECT scale FROM urdf_info WHERE object_id=?", (object_id,))
+        res = res.fetchone()
+        return res[0] if res is not None else None
+
 
 if __name__ == "__main__":
     config = Config()
@@ -130,7 +173,3 @@ if __name__ == "__main__":
             continue
         object_name = "_".join(f.split("_")[1:])[:-5]
         db.add_demo(object_name, base_dir + f)
-
-    # TODO add table for urdf info (object_name, urdf_path, scale)
-
-

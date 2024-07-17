@@ -57,7 +57,6 @@ def test_load_pybullet_object_models(env):
     obj_name = "YcbBanana"
     path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
     env.load_object(path_to_urdf)
-    # TODO look through and play around with those objects to find a set of candidates for DINOBot
 
 
 if __name__ == "__main__":
