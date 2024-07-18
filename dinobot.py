@@ -218,8 +218,6 @@ def deploy_dinobot(env, data, config, image_directory):
                 f"{image_directory}/image2_correspondences_{counter}.png"
             )
 
-        time_taken2 = results["actual_time_taken"]
-
         # Given the pixel coordinates of the correspondences, add the depth channel.
         points1 = env.project_to_3d(points1_2d, depth_bn)
         points2 = env.project_to_3d(points2_2d, depth_live)
