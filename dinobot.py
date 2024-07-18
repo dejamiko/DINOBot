@@ -88,6 +88,8 @@ def find_transformation_lower_DOF(x, y, config):
         np.linalg.det(R), 1
     ), f"Expected the rotation matrix to describe a rigid transform, got det={np.linalg.det(R)}"
 
+    # TODO infinite joint angles and Matis's transformation code
+
     return R, t
 
 
@@ -168,9 +170,7 @@ def deploy_dinobot(env, data, config, image_directory):
     )
 
     if config.RUN_LOCALLY and config.USE_FAST_CORRESPONDENCES:
-        extractor = ViTExtractor(
-            config.MODEL_TYPE, config.STRIDE, device=config.DEVICE
-        )
+        extractor = ViTExtractor(config.MODEL_TYPE, config.STRIDE, device=config.DEVICE)
     else:
         extractor = None
 
@@ -200,7 +200,7 @@ def deploy_dinobot(env, data, config, image_directory):
                 num_patches=num_patches,
                 descriptor_vectors=descriptor_vectors,
                 points1_2d=points1_2d,
-                extractor=extractor
+                extractor=extractor,
             )
             points1_2d, points2_2d, time_taken, num_patches, descriptor_vectors = (
                 results["points1_2d"],
@@ -316,11 +316,12 @@ def run_dino_once(config, db, target_object, base_object):
         env.reset()
         success = deploy_dinobot(env, data, config, image_directory)
         env.disconnect()
-        clear_images(image_directory)
+        if not config.USE_GUI:
+            clear_images(image_directory)
     except Exception as e:
         env.disconnect()
         print(f"Exception raised {e}")
-        if config.DEBUG:
+        if config.USE_GUI:
             raise e
         return False
     return success
@@ -328,12 +329,11 @@ def run_dino_once(config, db, target_object, base_object):
 
 if __name__ == "__main__":
     config = Config()
-    config.VERBOSITY = 0
+    config.VERBOSITY = 1
     config.USE_GUI = True
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
-    config.DEBUG = False
-    config.DRAW_CORRESPONDENCES = False
+    config.DRAW_CORRESPONDENCES = True
     db = DB(config)
     success = run_dino_once(config, db, "banana", "banana")
 

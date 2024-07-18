@@ -8,13 +8,13 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 from PIL import Image
+from flask import Flask, request, jsonify
+from transformers import AutoModel, AutoImageProcessor
+
 from .dino_vit_features.correspondences import (
     find_correspondences,
     draw_correspondences,
 )
-from flask import Flask, request, jsonify
-from transformers import AutoModel, AutoImageProcessor
-
 from .dinobot_utils import extract_desc_maps, extract_descriptor_nn, extract_descriptors
 
 warnings.filterwarnings("ignore")

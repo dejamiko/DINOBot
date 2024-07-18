@@ -107,7 +107,7 @@ class DemoSimEnv(SimEnv):
         """
         Close the gripper in the simulation.
         """
-        # make sure this closes with a lot of force to ensure the object is grasped
+        # TODO Try out the velocity control and lower the force
         p.setJointMotorControl2(
             self.objects["arm"], 9, p.POSITION_CONTROL, targetPosition=0.0, force=1000
         )
@@ -439,12 +439,12 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
-    obj_name = "YcbBanana"
+    obj_name = "YcbChipsCan"
     path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
     # path_to_urdf = f"duck_vhacd.urdf"
-    sim = DemoSimEnv(config, path_to_urdf)
+    sim = DemoSimEnv(config, path_to_urdf, 0.7)
 
-    record_demo()
+    # record_demo()
 
-    # data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
-    # sim.replay_demo(data["demo_velocities"])
+    data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
+    sim.replay_demo(data["demo_velocities"])

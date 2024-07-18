@@ -3,10 +3,9 @@ import numpy as np
 
 class Config:
     SEED = 0
-    DEBUG = False
 
     # DINOBot deployment constants
-    ERR_THRESHOLD = 0.05
+    ERR_THRESHOLD = 0.07
     IMAGE_DIR = "images/"
     # using the ssh tunnel from home ssh -L 8080:linnet.doc.ic.ac.uk:8000 md1823@shell5.doc.ic.ac.uk
     # BASE_URL = "http://localhost:8080/"
@@ -20,13 +19,13 @@ class Config:
 
     # DINO constants
     NUM_PAIRS = 8
-    LOAD_SIZE = 224
+    LOAD_SIZE = 480
     LAYER = 9
     FACET = "key"
     BIN = True
     THRESH = 0.05
     MODEL_TYPE = "dino_vits8"
-    STRIDE = 4
+    STRIDE = 8
     PATCH_SIZE = 8
     DEVICE = "cuda"
 

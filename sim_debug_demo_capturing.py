@@ -4,11 +4,11 @@ import numpy as np
 import pybullet as p
 
 from config import Config
-from sim import ArmEnv
+from sim_env import SimEnv
 
 
 # TODO this doesn't record anything, just moves as requested with the debug parameters
-class DemoSim(ArmEnv):
+class DemoSim(SimEnv):
     def __init__(self, task_name):
         super(DemoSim, self).__init__(task_name)
         self.debug_parameters = self.create_debug_parameters()
@@ -116,7 +116,7 @@ class DemoSim(ArmEnv):
             visualFramePosition=pos,
         )
 
-        # Initialize lists for additional spheres (links) and their positions
+        # Initialise lists for additional spheres (links) and their positions
         additional_balls = []
         link_positions = []
 
@@ -226,7 +226,6 @@ class DemoSim(ArmEnv):
             )
 
             self.move_target_balls(position, rotation)
-
             self.fast_move(position, rotation)
 
 

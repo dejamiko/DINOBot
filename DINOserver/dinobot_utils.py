@@ -1,7 +1,7 @@
 import torch
-from .dino_vit_features.extractor import ViTExtractor
 
 from .correspondences import find_correspondences
+from .dino_vit_features.extractor import ViTExtractor
 
 
 def extract_descriptors(image_1_path, image_2_path, config):

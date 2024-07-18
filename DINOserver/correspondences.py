@@ -1,14 +1,16 @@
 import argparse
-import torch
 from pathlib import Path
-from .dino_vit_features.extractor import ViTExtractor
-from tqdm import tqdm
-import numpy as np
-from sklearn.cluster import KMeans
-from PIL import Image
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
 from typing import List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from PIL import Image
+from matplotlib.colors import ListedColormap
+from sklearn.cluster import KMeans
+from tqdm import tqdm
+
+from .dino_vit_features.extractor import ViTExtractor
 
 
 def find_correspondences(

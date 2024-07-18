@@ -31,14 +31,14 @@ def _find_correspondences_locally(image_path1, image_path2, dino_config):
 
 
 def _find_correspondences_fast(
-        image_path1,
-        image_path2,
-        url,
-        dino_config,
-        num_patches=None,
-        descriptor_vectors=None,
-        points1=None,
-        extractor=None
+    image_path1,
+    image_path2,
+    url,
+    dino_config,
+    num_patches=None,
+    descriptor_vectors=None,
+    points1=None,
+    extractor=None,
 ):
     if dino_config["run_locally"]:
         return _find_correspondences_fast_locally(
@@ -63,13 +63,13 @@ def _find_correspondences_fast(
 
 
 def _find_correspondences_fast_locally(
-        image_path1,
-        image_path2,
-        dino_config,
-        extractor,
-        num_patches=None,
-        descriptor_vectors=None,
-        points1=None,
+    image_path1,
+    image_path2,
+    dino_config,
+    extractor,
+    num_patches=None,
+    descriptor_vectors=None,
+    points1=None,
 ):
     results = correspondences_fast_backend(
         dino_config,

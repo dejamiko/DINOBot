@@ -3,9 +3,9 @@ import os
 import numpy as np
 import pybullet as p
 from pybullet_object_models import ycb_objects
+from sim_env import SimEnv
 
 from config import Config
-from sim import ArmEnv
 
 
 def move_to_home(func):
@@ -62,7 +62,7 @@ def test_load_pybullet_object_models(env):
 if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 1
-    environment = ArmEnv(config)
+    environment = SimEnv(config)
 
     test_move_and_rotate(environment)
     test_load_normal_pybullet_objects(environment)

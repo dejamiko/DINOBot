@@ -1,8 +1,3 @@
-"""
-This file contains the code related to the simulation environment. It can be used within the DINOBot framework
-or for small independent experiments with the pybullet simulation environment.
-"""
-
 import time
 
 import cv2
@@ -16,8 +11,8 @@ from config import Config
 
 class SimEnv:
     """
-    A class that sets up the simulation environment and provides functions to interact with it. It contains a table,
-    an arm, and some objects that can be placed on the table.
+    A class that sets up the simulation environment and provides functions to interact with it. It contains a table, an
+    arm, and some objects that can be placed on the table.
     """
 
     def __init__(self, config):
@@ -104,7 +99,7 @@ class SimEnv:
             else y_base
         )
         angle = (
-            np.random.uniform(0, 2 * np.pi) if self.config.RANDOM_OBJECT_ROTATION else 0
+            np.random.uniform(0, np.pi / 2) if self.config.RANDOM_OBJECT_ROTATION else 0
         )
         self.objects[f"object"] = p.loadURDF(
             object_path,
@@ -273,11 +268,14 @@ class SimEnv:
                 restPoses=self.rest_poses,
             )
 
+        # TODO check the value ranges (making the joint angles larger could help)
+
         if len(target_joint_positions) != p.getNumJoints(self.objects["arm"]):
             target_joint_positions += tuple(
                 [0]
                 * (p.getNumJoints(self.objects["arm"]) - len(target_joint_positions))
             )
+            # TODO THIS DOESN'T NEED TO BE AT THE END (getJointInfo can help with this)
 
         self._move_to_target_joint_position(target_joint_positions)
 
@@ -286,6 +284,7 @@ class SimEnv:
         Move the arm to the target joint positions.
         :param target_joint_positions: the target joint positions
         """
+        # TODO Add linear interpolation in both space and joint angles
         p.setJointMotorControlArray(
             self.objects["arm"],
             list(range(p.getNumJoints(self.objects["arm"]))),
