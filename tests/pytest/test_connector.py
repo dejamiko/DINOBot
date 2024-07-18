@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 import connector
@@ -23,36 +21,34 @@ def connector_fixture():
 def test_get_correspondences_slow_no_draw_returns_correct_results(connector_fixture):
     config, image1, image2 = connector_fixture
     results = connector.get_correspondences(config, 0, image1, image2)
+    assert len(results) == 3
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
-    assert len(results) == 3
 
 
 def test_get_correspondences_slow_draw_returns_correct_results(connector_fixture):
     config, image1, image2 = connector_fixture
     config.DRAW_CORRESPONDENCES = True
     results = connector.get_correspondences(config, 0, image1, image2)
+    assert len(results) == 5
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
-    assert len(results) == 3
-    assert os.path.exists("images/image1_correspondences_0.png")
-    assert os.path.exists("images/image2_correspondences_0.png")
-    os.remove("images/image1_correspondences_0.png")
-    os.remove("images/image2_correspondences_0.png")
+    assert "image1_correspondences" in results
+    assert "image2_correspondences" in results
 
 
 def test_get_correspondences_fast_no_draw_returns_correct_results(connector_fixture):
     config, image1, image2 = connector_fixture
     config.USE_FAST_CORRESPONDENCES = True
     results = connector.get_correspondences(config, 0, image1, image2)
+    assert len(results) == 5
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
     assert "num_patches" in results
     assert "descriptor_vectors" in results
-    assert len(results) == 5
 
 
 def test_get_correspondences_fast_draw_returns_correct_results(connector_fixture):
@@ -60,16 +56,14 @@ def test_get_correspondences_fast_draw_returns_correct_results(connector_fixture
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
     results = connector.get_correspondences(config, 0, image1, image2)
+    assert len(results) == 7
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
     assert "num_patches" in results
     assert "descriptor_vectors" in results
-    assert len(results) == 5
-    assert os.path.exists("images/image1_correspondences_0.png")
-    assert os.path.exists("images/image2_correspondences_0.png")
-    os.remove("images/image1_correspondences_0.png")
-    os.remove("images/image2_correspondences_0.png")
+    assert "image1_correspondences" in results
+    assert "image2_correspondences" in results
 
 
 def test_get_correspondences_fast_no_draw_no_recalc_returns_correct_results(

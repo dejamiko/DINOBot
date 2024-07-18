@@ -8,12 +8,12 @@ from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
-from sim import ArmEnv
+from sim_env import SimEnv
 
 
-class DemoSim(ArmEnv):
+class DemoSimEnv(SimEnv):
     def __init__(self, config, object_path, scale=1.0):
-        super(DemoSim, self).__init__(config)
+        super(DemoSimEnv, self).__init__(config)
         self.gripper_open = False
         self.object_info = (object_path, scale)
         self.recording = False
@@ -326,7 +326,7 @@ class DemoSim(ArmEnv):
         """
         if self.recently_triggered > 0:
             return
-        super(DemoSim, self).reset()
+        super(DemoSimEnv, self).reset()
         self.gripper_open = False
         self.recording = False
         self.recorded_data = []
@@ -439,10 +439,10 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
-    # obj_name = "YcbTomatoSoupCan"
-    # path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    path_to_urdf = f"duck_vhacd.urdf"
-    sim = DemoSim(config, path_to_urdf)
+    obj_name = "YcbBanana"
+    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # path_to_urdf = f"duck_vhacd.urdf"
+    sim = DemoSimEnv(config, path_to_urdf)
 
     record_demo()
 

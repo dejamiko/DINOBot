@@ -54,6 +54,13 @@ def test_adding_with_existing_object_name_updates(db_with_demos_fixture):
     )
 
 
+def test_get_all_names_works(db_with_demos_fixture):
+    assert db_with_demos_fixture.get_all_object_names() == [
+        "object_name1",
+        "object_name2",
+    ]
+
+
 def test_add_transfer_works(db_with_demos_fixture):
     db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.1)
 

@@ -1,3 +1,5 @@
+import time
+
 from DINOserver.dino_vit_features.extractor import ViTExtractor
 
 from DINOserver.client import find_correspondences as find_correspondences_server
@@ -8,14 +10,14 @@ from DINOserver.server import correspondences_backend, correspondences_fast_back
 from config import Config
 
 
-def find_correspondences(image_path1, image_path2, url, dino_config):
+def _find_correspondences(image_path1, image_path2, url, dino_config):
     if dino_config["run_locally"]:
-        return find_correspondences_locally(image_path1, image_path2, dino_config)
+        return _find_correspondences_locally(image_path1, image_path2, dino_config)
     else:
         return find_correspondences_server(image_path1, image_path2, url, dino_config)
 
 
-def find_correspondences_locally(image_path1, image_path2, dino_config):
+def _find_correspondences_locally(image_path1, image_path2, dino_config):
     results = correspondences_backend(dino_config, image_path1, image_path2)
     if dino_config["draw"]:
         return (
@@ -32,7 +34,7 @@ def find_correspondences_locally(image_path1, image_path2, dino_config):
     )
 
 
-def find_correspondences_fast(
+def _find_correspondences_fast(
     image_path1,
     image_path2,
     url,
@@ -42,7 +44,7 @@ def find_correspondences_fast(
     points1=None,
 ):
     if dino_config["run_locally"]:
-        return find_correspondences_fast_locally(
+        return _find_correspondences_fast_locally(
             image_path1,
             image_path2,
             dino_config,
@@ -62,7 +64,7 @@ def find_correspondences_fast(
         )
 
 
-def find_correspondences_fast_locally(
+def _find_correspondences_fast_locally(
     image_path1,
     image_path2,
     dino_config,
@@ -119,22 +121,19 @@ def get_correspondences(config, counter, rgb_bn_path, rgb_live_path, **kwargs):
             arguments["points1"] = None
 
     if config.USE_FAST_CORRESPONDENCES:
-        res = find_correspondences_fast(**arguments)
+        res = _find_correspondences_fast(**arguments)
         results["num_patches"] = res[3]
         results["descriptor_vectors"] = res[4]
     else:
-        res = find_correspondences(**arguments)
+        res = _find_correspondences(**arguments)
         results["time_taken"] = res[2]
     results["points1_2d"] = res[0]
     results["points2_2d"] = res[1]
     results["time_taken"] = res[2]
 
     if config.DRAW_CORRESPONDENCES:
-        im_1_c = res[-2]
-        im_2_c = res[-1]
-
-        im_1_c.save(f"images/image1_correspondences_{counter}.png")
-        im_2_c.save(f"images/image2_correspondences_{counter}.png")
+        results["image1_correspondences"] = res[-2]
+        results["image2_correspondences"] = res[-1]
 
     return results
 

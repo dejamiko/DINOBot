@@ -4,13 +4,16 @@ import time
 
 import cv2
 import numpy as np
+import pybullet as p
 import requests
 import torch
 import torchvision.transforms.functional as f
+from scipy.spatial.transform import Rotation
 
 from config import Config
 from connector import get_correspondences
-from sim_keyboard_demo_capturing import DemoSim
+from database import DB
+from demo_sim_env import DemoSimEnv
 
 
 def find_transformation(x, y, config):
@@ -72,7 +75,7 @@ def find_transformation_lower_DOF(x, y, config):
     if np.linalg.det(R_2d) < 0:
         if config.VERBOSITY > 0:
             print("det(R) < 0, reflection detected")
-        Vt[2, :] *= -1
+        Vt[1, :] *= -1
         R_2d = Vt.T @ U.T
 
     # Create the full rotation matrix
@@ -84,7 +87,7 @@ def find_transformation_lower_DOF(x, y, config):
 
     assert np.allclose(
         np.linalg.det(R), 1
-    ), "Expected the rotation matrix to describe a rigid transform"
+    ), f"Expected the rotation matrix to describe a rigid transform, got det={np.linalg.det(R)}"
 
     return R, t
 
@@ -136,7 +139,7 @@ def clear_images(image_directory):
                 shutil.rmtree(file_path)
         except Exception as e:
             print("Failed to delete %s. Reason: %s" % (file_path, e))
-    os.removedirs(image_directory)
+    os.rmdir(image_directory)
 
 
 def set_up_images_directory(config):
@@ -206,6 +209,16 @@ def deploy_dinobot(env, data, config, image_directory):
                 results["points2_2d"],
                 results["time_taken"],
             )
+
+        if config.DRAW_CORRESPONDENCES:
+            results["image1_correspondences"].save(
+                f"{image_directory}/image1_correspondences_{counter}.png"
+            )
+            results["image2_correspondences"].save(
+                f"{image_directory}/image2_correspondences_{counter}.png"
+            )
+
+        time_taken2 = results["actual_time_taken"]
 
         # Given the pixel coordinates of the correspondences, add the depth channel.
         points1 = env.project_to_3d(points1_2d, depth_bn)
@@ -286,14 +299,16 @@ def calculate_object_similarities(config):
     return similarities
 
 
-def run_dino_once(config, demo_path):
+def run_dino_once(config, db, target_object, base_object):
     try:
         image_directory = set_up_images_directory(config)
 
         # RECORD DEMO:
-        env = DemoSim(config, "jenga/jenga.urdf")
+        env = DemoSimEnv(
+            config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object)
+        )
         # for now, just load the latest demo
-        data = env.load_demonstration(demo_path)
+        data = env.load_demonstration(db.get_demo_for_object(base_object))
 
         # TEST TIME DEPLOYMENT
         # Move/change the object and move the end-effector to the home (or a random) pose.
@@ -303,6 +318,7 @@ def run_dino_once(config, demo_path):
         env.disconnect()
         clear_images(image_directory)
     except Exception as e:
+        env.disconnect()
         print(f"Exception raised {e}")
         if config.DEBUG:
             raise e
@@ -316,7 +332,9 @@ if __name__ == "__main__":
     config.USE_GUI = True
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
-    success = run_dino_once(config, "demonstrations/demonstration_banana.json")
-    print(f"Finished running with success = {success}")
+    config.DEBUG = False
+    config.DRAW_CORRESPONDENCES = False
+    db = DB(config)
+    success = run_dino_once(config, db, "banana", "banana")
 
     # TODO store results of the alignment phase to be able to run just the replay with gui

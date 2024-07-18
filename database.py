@@ -206,6 +206,10 @@ class DB:
         res = res.fetchone()
         return res[0] if res is not None else None
 
+    def get_all_object_names(self):
+        res = self.con.execute("SELECT object_name FROM demonstrations")
+        return [r[0] for r in res.fetchall()]
+
 
 def populate_urdf_info(db):
     # YCB objects
@@ -286,3 +290,5 @@ if __name__ == "__main__":
         db.add_demo(object_name, base_dir + f)
 
     populate_urdf_info(db)
+
+    print(db.get_all_object_names())

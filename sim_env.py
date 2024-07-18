@@ -14,7 +14,7 @@ from scipy.spatial.transform import Rotation
 from config import Config
 
 
-class ArmEnv:
+class SimEnv:
     """
     A class that sets up the simulation environment and provides functions to interact with it. It contains a table,
     an arm, and some objects that can be placed on the table.
@@ -94,12 +94,12 @@ class ArmEnv:
         # load some object on the table somewhere random (within a certain range)
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
         pos_x = (
-            np.random.uniform(-0.1, 0.1) + x_base
+            np.random.uniform(-0.05, 0.05) + x_base
             if self.config.RANDOM_OBJECT_POSITION
             else x_base
         )
         pos_y = (
-            np.random.uniform(-0.1, 0.1) + y_base
+            np.random.uniform(-0.05, 0.05) + y_base
             if self.config.RANDOM_OBJECT_POSITION
             else y_base
         )
@@ -112,13 +112,9 @@ class ArmEnv:
             p.getQuaternionFromEuler([0, 0, angle]),
             globalScaling=scale,
         )
-        colour = np.random.uniform(0, 1, 3)
-        p.changeVisualShape(
-            self.objects[f"object"], -1, rgbaColor=colour.tolist() + [1]
-        )
 
         # let the object drop
-        for i in range(50):
+        for i in range(100):
             p.stepSimulation()
 
         # move the arm so the camera can see the object
@@ -496,4 +492,4 @@ if __name__ == "__main__":
     A sample script to spawn some cubes on a table and move the robot arm towards one of them.
     """
     config = Config()
-    env = ArmEnv(config)
+    env = SimEnv(config)

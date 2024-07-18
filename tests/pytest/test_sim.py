@@ -3,19 +3,19 @@ import pybullet as p
 import pytest
 
 from config import Config
-from sim import ArmEnv
+from sim_env import SimEnv
 
 
 def test_sim_can_be_created():
     config = Config()
-    sim = ArmEnv(config)
+    sim = SimEnv(config)
     sim.disconnect()
 
 
 def test_sim_can_be_created_no_gui():
     config = Config()
     config.USE_GUI = False
-    sim = ArmEnv(config)
+    sim = SimEnv(config)
     sim.disconnect()
 
 
@@ -23,7 +23,7 @@ def test_sim_can_be_created_no_gui():
 def sim_fixture():
     config = Config()
     config.USE_GUI = False
-    sim = ArmEnv(config)
+    sim = SimEnv(config)
     yield sim, config
     sim.disconnect()
 
