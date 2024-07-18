@@ -4,11 +4,10 @@ import time
 
 import cv2
 import numpy as np
-import pybullet as p
 import requests
 import torch
 import torchvision.transforms.functional as f
-from scipy.spatial.transform import Rotation
+from DINOserver.dino_vit_features.extractor import ViTExtractor
 
 from config import Config
 from connector import get_correspondences
@@ -168,6 +167,13 @@ def deploy_dinobot(env, data, config, image_directory):
         data["demo_velocities"],
     )
 
+    if config.RUN_LOCALLY and config.USE_FAST_CORRESPONDENCES:
+        extractor = ViTExtractor(
+            config["model_type"], config["stride"], device=config["device"]
+        )
+    else:
+        extractor = None
+
     # additionally save the images
     for im, dp in zip(data["rgb_bn"], data["depth_bn"]):
         _, im = transform_images(config, dp, im)
@@ -194,6 +200,7 @@ def deploy_dinobot(env, data, config, image_directory):
                 num_patches=num_patches,
                 descriptor_vectors=descriptor_vectors,
                 points1_2d=points1_2d,
+                extractor=extractor
             )
             points1_2d, points2_2d, time_taken, num_patches, descriptor_vectors = (
                 results["points1_2d"],
@@ -301,17 +308,12 @@ def run_dino_once(config, db, target_object, base_object):
     try:
         image_directory = set_up_images_directory(config)
 
-        # RECORD DEMO:
         env = DemoSimEnv(
             config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object)
         )
-        # for now, just load the latest demo
         data = env.load_demonstration(db.get_demo_for_object(base_object))
 
-        # TEST TIME DEPLOYMENT
-        # Move/change the object and move the end-effector to the home (or a random) pose.
         env.reset()
-        # load a new object
         success = deploy_dinobot(env, data, config, image_directory)
         env.disconnect()
         clear_images(image_directory)

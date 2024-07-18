@@ -1,7 +1,3 @@
-import time
-
-from DINOserver.dino_vit_features.extractor import ViTExtractor
-
 from DINOserver.client import find_correspondences as find_correspondences_server
 from DINOserver.client import (
     find_correspondences_fast as find_correspondences_fast_server,
@@ -35,19 +31,21 @@ def _find_correspondences_locally(image_path1, image_path2, dino_config):
 
 
 def _find_correspondences_fast(
-    image_path1,
-    image_path2,
-    url,
-    dino_config,
-    num_patches=None,
-    descriptor_vectors=None,
-    points1=None,
+        image_path1,
+        image_path2,
+        url,
+        dino_config,
+        num_patches=None,
+        descriptor_vectors=None,
+        points1=None,
+        extractor=None
 ):
     if dino_config["run_locally"]:
         return _find_correspondences_fast_locally(
             image_path1,
             image_path2,
             dino_config,
+            extractor,
             num_patches,
             descriptor_vectors,
             points1,
@@ -65,16 +63,14 @@ def _find_correspondences_fast(
 
 
 def _find_correspondences_fast_locally(
-    image_path1,
-    image_path2,
-    dino_config,
-    num_patches=None,
-    descriptor_vectors=None,
-    points1=None,
+        image_path1,
+        image_path2,
+        dino_config,
+        extractor,
+        num_patches=None,
+        descriptor_vectors=None,
+        points1=None,
 ):
-    extractor = ViTExtractor(
-        dino_config["model_type"], dino_config["stride"], device=dino_config["device"]
-    )
     results = correspondences_fast_backend(
         dino_config,
         image_path1,
@@ -119,6 +115,8 @@ def get_correspondences(config, counter, rgb_bn_path, rgb_live_path, **kwargs):
             arguments["num_patches"] = None
             arguments["descriptor_vectors"] = None
             arguments["points1"] = None
+        if config.RUN_LOCALLY:
+            arguments["extractor"] = kwargs.get("extractor", None)
 
     if config.USE_FAST_CORRESPONDENCES:
         res = _find_correspondences_fast(**arguments)
