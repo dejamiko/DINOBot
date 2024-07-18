@@ -169,7 +169,7 @@ def deploy_dinobot(env, data, config, image_directory):
 
     if config.RUN_LOCALLY and config.USE_FAST_CORRESPONDENCES:
         extractor = ViTExtractor(
-            config["model_type"], config["stride"], device=config["device"]
+            config.MODEL_TYPE, config.STRIDE, device=config.DEVICE
         )
     else:
         extractor = None
