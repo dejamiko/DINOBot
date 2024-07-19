@@ -10,8 +10,6 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = True
     db = create_and_populate_db(config)
 
-    print("DB populated, starting the transfer")
-
     names = db.get_all_object_names()
 
     num_tries = 10

@@ -10,10 +10,8 @@ from config import Config
 
 def get_path(source):
     if source == "pybullet_data":
-        print(pybullet_data.getDataPath())
         return pybullet_data.getDataPath()
     elif source == "ycb":
-        print(ycb_objects.getDataPath())
         return ycb_objects.getDataPath()
     elif source == "test":
         print("This should only be used for tests")
@@ -165,8 +163,6 @@ class DB:
     def add_urdf_info(self, object_name, urdf_path, scale, source):
         self._check_paths(os.path.join(get_path(source), urdf_path), ".urdf")
 
-        rel_urdf_path = os.path.relpath(urdf_path, "/Users/mikolajdeja/Coding/DINOBot")
-
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
@@ -179,13 +175,13 @@ class DB:
             with self.con as c:
                 c.execute(
                     "UPDATE urdf_info SET urdf_path=?, scale=?, source=? WHERE object_id=?",
-                    (rel_urdf_path, scale, source, object_id),
+                    (urdf_path, scale, source, object_id),
                 )
         else:
             with self.con as c:
                 c.execute(
                     "INSERT INTO urdf_info VALUES(?, ?, ?, ?)",
-                    (object_id, rel_urdf_path, scale, source),
+                    (object_id, urdf_path, scale, source),
                 )
 
     def get_urdf_path(self, object_name):
@@ -199,8 +195,6 @@ class DB:
             "SELECT source, urdf_path FROM urdf_info WHERE object_id=?", (object_id,)
         )
         res = res.fetchone()
-        if res is not None:
-            print(get_path(res[0]), res[1])
         return os.path.join(get_path(res[0]), res[1]) if res is not None else None
 
     def get_urdf_scale(self, object_name):
