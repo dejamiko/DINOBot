@@ -28,7 +28,7 @@ def reset(func):
 
 
 @move_to_home
-def test_move_and_rotate(env):
+def move_and_rotate_test(env):
     env.move_in_camera_frame(np.array([-0.3, 0, 0]), np.eye(3))
     env.move_in_camera_frame(np.array([0.3, 0, 0]), np.eye(3))
     env.move_in_camera_frame(
@@ -47,13 +47,13 @@ def test_move_and_rotate(env):
 
 @reset
 @move_to_home
-def test_load_normal_pybullet_objects(env):
+def load_normal_pybullet_objects_test(env):
     env.load_object("objects/mug.urdf")
 
 
 @reset
 @move_to_home
-def test_load_pybullet_object_models(env):
+def load_pybullet_object_models_test(env):
     obj_name = "YcbBanana"
     path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
     env.load_object(path_to_urdf)
@@ -61,9 +61,10 @@ def test_load_pybullet_object_models(env):
 
 if __name__ == "__main__":
     config = Config()
-    config.VERBOSITY = 1
+    config.VERBOSITY = 2
+    config.TAKE_IMAGE_AT_EVERY_STEP = True
     environment = SimEnv(config)
 
-    test_move_and_rotate(environment)
-    test_load_normal_pybullet_objects(environment)
-    test_load_pybullet_object_models(environment)
+    move_and_rotate_test(environment)
+    load_normal_pybullet_objects_test(environment)
+    load_pybullet_object_models_test(environment)

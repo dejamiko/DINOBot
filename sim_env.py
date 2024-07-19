@@ -9,6 +9,16 @@ from scipy.spatial.transform import Rotation
 from config import Config
 
 
+def to_euler(angles):
+    if len(angles) == 3:
+        angles = Rotation.from_matrix(angles).as_quat(canonical=True)
+    angles = p.getEulerFromQuaternion(angles)
+    s = ""
+    for a in angles:
+        s += f"{a * 180 / np.pi} "
+    return s
+
+
 class SimEnv:
     """
     A class that sets up the simulation environment and provides functions to interact with it. It contains a table, an
@@ -176,12 +186,21 @@ class SimEnv:
         """
         if self.config.VERBOSITY > 1:
             print("Moving in camera frame")
+            print(
+                f"Camera rotation {to_euler(self._get_camera_position_and_rotation()[1])}"
+            )
+            print(
+                f"EEF rotation {to_euler(p.getLinkState(self.objects['arm'], 11)[1])}"
+            )
         camera_position, camera_rotation = self._get_camera_position_and_rotation()
-        camera_to_eef_position, camera_to_eef_orientation = (
+        camera_to_eef_translation, camera_to_eef_rotation = (
             self._get_eef_to_camera_transform()
         )
-        eef_position = camera_position - np.dot(camera_rotation, camera_to_eef_position)
-        eef_rotation = np.dot(camera_rotation, np.linalg.inv(camera_to_eef_orientation))
+        eef_rotation = np.dot(np.linalg.inv(camera_to_eef_rotation), camera_rotation)
+        # post-multiply row vector with transposed rotation matrix
+        eef_position = camera_position - np.dot(
+            camera_to_eef_translation, eef_rotation.T
+        )
         eef_position_actual, eef_orientation_actual = p.getLinkState(
             self.objects["arm"], 11
         )[:2]
@@ -192,44 +211,49 @@ class SimEnv:
             eef_rotation,
             np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3),
         ), f"{eef_rotation} != {np.array(p.getMatrixFromQuaternion(eef_orientation_actual)).reshape(-1, 3)}"
-        new_camera_position = camera_position + np.dot(camera_rotation, t)
+        # post-multiply row vector with transposed rotation matrix
+        new_camera_position = camera_position + np.dot(t, camera_rotation.T)
         new_camera_rotation = np.dot(camera_rotation, rot)
 
-        new_eef_position = new_camera_position - np.dot(
-            new_camera_rotation, camera_to_eef_position
+        new_eef_rotation = np.dot(
+            np.linalg.inv(camera_to_eef_rotation), new_camera_rotation
         )
-        new_eef_orientation = np.dot(
-            new_camera_rotation, np.linalg.inv(camera_to_eef_orientation)
+        # post-multiply row vector with transposed rotation matrix
+        new_eef_position = new_camera_position - np.dot(
+            camera_to_eef_translation, new_eef_rotation.T
         )
 
         if self.config.VERBOSITY > 1:
             print(
                 "Old camera position:",
                 camera_position,
-                "Old camera orientation:",
-                camera_rotation,
+                "Old camera rotation:",
+                to_euler(camera_rotation),
             )
             print(
                 "New camera position:",
                 new_camera_position,
-                "New camera orientation:",
-                new_camera_rotation,
+                "New camera rotation:",
+                to_euler(new_camera_rotation),
             )
             print(
-                "Old eef position:", eef_position, "Old eef orientation:", eef_rotation
+                "Old eef position:",
+                eef_position,
+                "Old eef rotation:",
+                to_euler(eef_rotation),
             )
             print(
                 "New eef position:",
                 new_eef_position,
-                "New eef orientation:",
-                new_eef_orientation,
+                "New eef rotation:",
+                to_euler(new_eef_rotation),
             )
 
-        new_eef_orientation = Rotation.from_matrix(new_eef_orientation).as_quat(
+        new_eef_rotation = Rotation.from_matrix(new_eef_rotation).as_quat(
             canonical=True
         )
 
-        self._move_with_debug_dot(new_eef_position, new_eef_orientation)
+        self._move_with_debug_dot(new_eef_position, new_eef_rotation)
 
     @staticmethod
     def disconnect():
@@ -413,13 +437,14 @@ class SimEnv:
         """
         eef_position, eef_rotation = p.getLinkState(self.objects["arm"], 11)[:2]
         eef_rotation = np.array(p.getMatrixFromQuaternion(eef_rotation)).reshape(3, 3)
-        eef_to_camera_position, eef_to_camera_orientation = (
+        eef_to_camera_translation, eef_to_camera_rotation = (
             self._get_eef_to_camera_transform()
         )
+        # post-multiply row vector with transposed rotation matrix
         camera_position = np.array(eef_position) + np.dot(
-            eef_rotation, eef_to_camera_position
+            eef_to_camera_translation, eef_rotation.T
         )
-        camera_rotation = np.dot(eef_rotation, eef_to_camera_orientation)
+        camera_rotation = np.dot(eef_to_camera_rotation, eef_rotation)
 
         return camera_position, camera_rotation
 
@@ -442,12 +467,12 @@ class SimEnv:
         Get the transformation matrix from camera frame to end-effector frame.
         """
         camera_to_eef_position = np.array(self.config.CAMERA_TO_EEF_TRANSLATION)
-        camera_to_eef_orientation = np.array(
+        camera_to_eef_rotation = np.array(
             p.getMatrixFromQuaternion(
                 p.getQuaternionFromEuler(self.config.CAMERA_TO_EEF_ROTATION)
             )
         ).reshape(3, 3)
-        return camera_to_eef_position, camera_to_eef_orientation
+        return camera_to_eef_position, camera_to_eef_rotation
 
     def _project_points_to_world_frame(self, points):
         """
@@ -469,21 +494,18 @@ class SimEnv:
         :param depth_buffer: The depth buffer from the camera
         """
         all_pixels_in_camera_feed = []
-        for x in range(self.config.LOAD_SIZE):
-            for y in range(self.config.LOAD_SIZE):
+        colours = []
+        for x in range(0, self.config.LOAD_SIZE, 8):
+            for y in range(0, self.config.LOAD_SIZE, 8):
                 all_pixels_in_camera_feed.append([x, y])
-        reduced_pixels = all_pixels_in_camera_feed[::8]
-        points3d = self.project_to_3d(reduced_pixels, depth_buffer)
+                colours.append(live_img[x, y] / 255.0)
+        points3d = self.project_to_3d(all_pixels_in_camera_feed, depth_buffer)
         world_points = self._project_points_to_world_frame(points3d)
         # draw the points in 3D using debug points
-        colors = live_img.reshape(-1, 3) / 255.0  # Normalize BGR image values to [0, 1]
-        reduced_colors = colors[::8]
-        p.removeAllUserDebugItems()
         if self.objects.get("points_debug_3d") is not None:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
-        self.objects["points_debug_3d"] = p.addUserDebugPoints(
-            world_points, reduced_colors, 5
-        )
+            self.objects.pop("points_debug_3d")
+        self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, colours, 5)
 
 
 if __name__ == "__main__":

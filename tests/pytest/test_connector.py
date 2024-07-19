@@ -10,8 +10,8 @@ def connector_fixture():
     config.LOAD_SIZE = 40
     config.RUN_LOCALLY = True
     config.DEVICE = "cpu"
-    image1 = "tests/assets/image1.png"
-    image2 = "tests/assets/image2.png"
+    image1 = "tests/_test_assets/image1.png"
+    image2 = "tests/_test_assets/image2.png"
 
     # TODO mock the server somehow and assert the results are the same
 

@@ -17,7 +17,7 @@ if __name__ == "__main__":
         success_count = 0
         for s in range(num_tries):
             config.SEED = s
-            success = run_dino_once(config, db, "banana", "banana")
+            success = run_dino_once(config, db, n, n)
             print(n, s, success)
             if success:
                 success_count += 1

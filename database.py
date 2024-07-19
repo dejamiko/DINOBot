@@ -11,7 +11,7 @@ from config import Config
 class DB:
     def __init__(self, config, name="dino.db"):
         self.config = config
-        self.con = sqlite3.connect(name)
+        self.con = sqlite3.connect(os.path.join(config.BASE_DIR, name))
 
     def create_tables(self):
         sql_string = (
@@ -207,7 +207,12 @@ class DB:
         return res[0] if res is not None else None
 
     def get_all_object_names(self):
-        res = self.con.execute("SELECT object_name FROM demonstrations")
+        res = self.con.execute(
+            "SELECT object_name "
+            "FROM demonstrations "
+            "WHERE NOT object_name LIKE '%\_OLD%' ESCAPE '\\' "
+            "ORDER BY object_name"
+        )
         return [r[0] for r in res.fetchall()]
 
 

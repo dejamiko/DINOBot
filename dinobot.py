@@ -44,7 +44,16 @@ def find_transformation(x, y, config):
         R = Vt.T @ U.T
 
     # Determine translation vector
-    t = y_centroid - np.dot(R, x_centroid)
+    # post-multiply row vector with transposed rotation matrix
+    t = y_centroid - np.dot(x_centroid, R.T)
+    t2 = y_centroid - np.dot(R, x_centroid)
+
+    assert np.allclose(t, t2), f"{t} != {t2}"
+
+    assert np.allclose(
+        np.linalg.det(R), 1
+    ), f"Expected the rotation matrix to describe a rigid transform, got det={np.linalg.det(R)}"
+
     return R, t
 
 
@@ -82,7 +91,10 @@ def find_transformation_lower_DOF(x, y, config):
     R[:2, :2] = R_2d
 
     # Determine the translation vector
-    t = y_centroid - np.dot(R, x_centroid)
+    # post-multiply row vector with transposed rotation matrix
+    t = y_centroid - np.dot(x_centroid, R.T)
+    t2 = y_centroid - np.dot(R, x_centroid)
+    assert np.allclose(t, t2), f"{t} != {t2}"
 
     assert np.allclose(
         np.linalg.det(R), 1

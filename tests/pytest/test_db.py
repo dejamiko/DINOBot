@@ -14,47 +14,55 @@ def db_fixture():
     db.create_tables()
     yield db
     db.remove_all_tables()
-    os.remove("test.db")
+    os.remove(os.path.join(config.BASE_DIR, "test.db"))
 
 
 @pytest.fixture
 def db_with_demos_fixture(db_fixture):
-    db_fixture.add_demo("object_name1", "tests/assets/demo1.json")
-    db_fixture.add_demo("object_name2", "tests/assets/demo2.json")
+    db_fixture.add_demo("object_name1", "tests/_test_assets/demo1.json")
+    db_fixture.add_demo("object_name2", "tests/_test_assets/demo2.json")
     yield db_fixture
 
 
 def test_can_add_demos(db_fixture):
-    db_fixture.add_demo("object_name1", "tests/assets/demo1.json")
-    db_fixture.add_demo("object_name2", "tests/assets/demo2.json")
+    db_fixture.add_demo("object_name1", "tests/_test_assets/demo1.json")
+    db_fixture.add_demo("object_name2", "tests/_test_assets/demo2.json")
 
 
 def test_object_demo_path_is_unique(db_with_demos_fixture):
     with pytest.raises(sqlite3.IntegrityError) as e:
-        db_with_demos_fixture.add_demo("object_name3", "tests/assets/demo1.json")
+        db_with_demos_fixture.add_demo("object_name3", "tests/_test_assets/demo1.json")
     assert str(e.value) == "UNIQUE constraint failed: demonstrations.demo_path"
 
 
 def test_get_demo_works(db_with_demos_fixture):
     assert (
         db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/assets/demo1.json"
+        == "tests/_test_assets/demo1.json"
     )
 
 
 def test_adding_with_existing_object_name_updates(db_with_demos_fixture):
     assert (
         db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/assets/demo1.json"
+        == "tests/_test_assets/demo1.json"
     )
-    db_with_demos_fixture.add_demo("object_name1", "tests/assets/demo3.json")
+    db_with_demos_fixture.add_demo("object_name1", "tests/_test_assets/demo3.json")
     assert (
         db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/assets/demo3.json"
+        == "tests/_test_assets/demo3.json"
     )
 
 
 def test_get_all_names_works(db_with_demos_fixture):
+    assert db_with_demos_fixture.get_all_object_names() == [
+        "object_name1",
+        "object_name2",
+    ]
+
+
+def test_get_all_names_ignores_old(db_with_demos_fixture):
+    db_with_demos_fixture.add_demo("object_name_old1", "tests/_test_assets/demo3.json")
     assert db_with_demos_fixture.get_all_object_names() == [
         "object_name1",
         "object_name2",
@@ -100,33 +108,42 @@ def test_add_transfer_for_existing_objects_updates(db_with_demos_fixture):
 
 
 def test_add_urdf_info_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info("object_name1", "tests/assets/urdf1.urdf", 1.0)
-    db_with_demos_fixture.add_urdf_info("object_name2", "tests/assets/urdf2.urdf", 1.0)
+    db_with_demos_fixture.add_urdf_info(
+        "object_name1", "tests/_test_assets/urdf1.urdf", 1.0
+    )
+    db_with_demos_fixture.add_urdf_info(
+        "object_name2", "tests/_test_assets/urdf2.urdf", 1.0
+    )
 
 
 def test_add_urdf_info_with_wrong_path_fails(db_with_demos_fixture):
     with pytest.raises(AssertionError):
         db_with_demos_fixture.add_urdf_info(
-            "object_name1", "tests/assets/urdf3.urdf", 1.0
+            "object_name1", "tests/_test_assets/urdf3.urdf", 1.0
         )
 
 
 def test_add_urdf_info_with_wrong_extension_fails(db_with_demos_fixture):
     with pytest.raises(AssertionError):
         db_with_demos_fixture.add_urdf_info(
-            "object_name1", "tests/assets/demo1.json", 1.0
+            "object_name1", "tests/_test_assets/demo1.json", 1.0
         )
 
 
 def test_get_urdf_path_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info("object_name1", "tests/assets/urdf1.urdf", 1.0)
+    db_with_demos_fixture.add_urdf_info(
+        "object_name1", "tests/_test_assets/urdf1.urdf", 1.0
+    )
     assert (
-        db_with_demos_fixture.get_urdf_path("object_name1") == "tests/assets/urdf1.urdf"
+        db_with_demos_fixture.get_urdf_path("object_name1")
+        == "tests/_test_assets/urdf1.urdf"
     )
 
 
 def test_get_urdf_scale_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info("object_name1", "tests/assets/urdf1.urdf", 1.0)
+    db_with_demos_fixture.add_urdf_info(
+        "object_name1", "tests/_test_assets/urdf1.urdf", 1.0
+    )
     assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.0
 
 
@@ -141,13 +158,19 @@ def test_get_urdf_scale_for_wrong_name_fails(db_with_demos_fixture):
 
 
 def test_add_urdf_info_for_existing_object_updates(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info("object_name1", "tests/assets/urdf1.urdf", 1.0)
+    db_with_demos_fixture.add_urdf_info(
+        "object_name1", "tests/_test_assets/urdf1.urdf", 1.0
+    )
     assert (
-        db_with_demos_fixture.get_urdf_path("object_name1") == "tests/assets/urdf1.urdf"
+        db_with_demos_fixture.get_urdf_path("object_name1")
+        == "tests/_test_assets/urdf1.urdf"
     )
     assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.0
-    db_with_demos_fixture.add_urdf_info("object_name1", "tests/assets/urdf2.urdf", 2.0)
+    db_with_demos_fixture.add_urdf_info(
+        "object_name1", "tests/_test_assets/urdf2.urdf", 2.0
+    )
     assert (
-        db_with_demos_fixture.get_urdf_path("object_name1") == "tests/assets/urdf2.urdf"
+        db_with_demos_fixture.get_urdf_path("object_name1")
+        == "tests/_test_assets/urdf2.urdf"
     )
     assert db_with_demos_fixture.get_urdf_scale("object_name1") == 2.0

@@ -287,6 +287,7 @@ class DemoSimEnv(SimEnv):
         Replay a demonstration from a list of keystrokes.
         :param demo: The demonstration to replay.
         """
+
         self.recently_triggered = 10
         # create text on the screen to show that the demo is playing
         self.objects["replaying_text"] = p.addUserDebugText(
