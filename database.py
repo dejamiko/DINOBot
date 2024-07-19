@@ -199,6 +199,8 @@ class DB:
             "SELECT source, urdf_path FROM urdf_info WHERE object_id=?", (object_id,)
         )
         res = res.fetchone()
+        if res is not None:
+            print(get_path(res[0]), res[1])
         return os.path.join(get_path(res[0]), res[1]) if res is not None else None
 
     def get_urdf_scale(self, object_name):
@@ -262,7 +264,7 @@ def populate_urdf_info(db):
 
 
 def insert_ycb_object(db, obj_name, scale=1.0):
-    path_to_urdf = os.path.join(obj_name, "model.urdf")
+    path_to_urdf = obj_name + "/model.urdf"
     snake_case_name = re.sub(r"(?<!^)(?=[A-Z])", "_", obj_name).lower()[4:]
     db.add_urdf_info(snake_case_name, path_to_urdf, scale, "ycb")
 

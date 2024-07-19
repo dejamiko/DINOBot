@@ -336,7 +336,7 @@ def run_dino_once(config, db, target_object, base_object):
         print(f"Exception raised {e}")
         if config.USE_GUI:
             raise e
-        return False
+        return False, -1
     return success, tries
 
 
