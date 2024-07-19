@@ -10,8 +10,10 @@ from config import Config
 
 def get_path(source):
     if source == "pybullet_data":
+        print(pybullet_data.getDataPath())
         return pybullet_data.getDataPath()
     elif source == "ycb":
+        print(ycb_objects.getDataPath())
         return ycb_objects.getDataPath()
     elif source == "test":
         print("This should only be used for tests")
@@ -283,3 +285,4 @@ if __name__ == "__main__":
     config = Config()
     db = create_and_populate_db(config)
     print(db.get_all_object_names())
+    print(db.get_urdf_path("banana"))

@@ -350,5 +350,3 @@ if __name__ == "__main__":
     config.SEED = 3
     db = create_and_populate_db(config)
     success = run_dino_once(config, db, "banana", "banana")
-
-    # TODO store results of the alignment phase to be able to run just the replay with gui
