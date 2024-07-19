@@ -11,7 +11,7 @@ from DINOserver.dino_vit_features.extractor import ViTExtractor
 
 from config import Config
 from connector import get_correspondences
-from database import DB
+from database import create_and_populate_db
 from demo_sim_env import DemoSimEnv
 
 
@@ -259,8 +259,10 @@ def deploy_dinobot(env, data, config, image_directory):
             print("Reached tries limit")
             return False
 
+    # before replay, store the current state, so it can be reloaded and replayed
+    env.store_state()
     # Once error is small enough, replay demo.
-    return env.replay_demo(demo_velocities)
+    return env.replay_demo(demo_velocities), counter
 
 
 def transform_images(config, depth_bn, rgb_bn):
@@ -326,17 +328,16 @@ def run_dino_once(config, db, target_object, base_object):
         data = env.load_demonstration(db.get_demo_for_object(base_object))
 
         env.reset()
-        success = deploy_dinobot(env, data, config, image_directory)
+        success, tries = deploy_dinobot(env, data, config, image_directory)
         env.disconnect()
         if not config.USE_GUI:
             clear_images(image_directory)
     except Exception as e:
-        env.disconnect()
         print(f"Exception raised {e}")
         if config.USE_GUI:
             raise e
         return False
-    return success
+    return success, tries
 
 
 if __name__ == "__main__":
@@ -346,7 +347,8 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    db = DB(config)
+    config.SEED = 3
+    db = create_and_populate_db(config)
     success = run_dino_once(config, db, "banana", "banana")
 
     # TODO store results of the alignment phase to be able to run just the replay with gui

@@ -128,7 +128,7 @@ class SimEnv:
             pos = [pos_x, pos_y, eef_pos[2]]
         else:
             pos = [x_base, y_base, eef_pos[2]]
-        self._move_to_target_position_and_orientation(pos)
+        self._move_to_target_position_and_rotation(pos)
 
     def get_rgbd_image(self):
         """
@@ -262,35 +262,26 @@ class SimEnv:
         """
         p.disconnect()
 
-    def _move_to_target_position_and_orientation(
-        self, target_position, target_orientation=None
+    def _move_to_target_position_and_rotation(
+        self, target_position, target_rotation=None
     ):
         """
         Move the arm to the target position.
         :param target_position: the position of the target in the world frame
-        :param target_orientation: the orientation of the target in the world frame
+        :param target_rotation: the rotation of the target in the world frame
         """
-        if target_orientation is not None:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"],
-                11,
-                target_position,
-                target_orientation,
-                lowerLimits=self.lower_limits,
-                upperLimits=self.upper_limits,
-                jointRanges=self.joint_ranges,
-                restPoses=self.rest_poses,
-            )
-        else:
-            target_joint_positions = p.calculateInverseKinematics(
-                self.objects["arm"],
-                11,
-                target_position,
-                lowerLimits=self.lower_limits,
-                upperLimits=self.upper_limits,
-                jointRanges=self.joint_ranges,
-                restPoses=self.rest_poses,
-            )
+        if target_rotation is None:
+            target_rotation = p.getLinkState(self.objects["arm"], 11)[1]
+        target_joint_positions = p.calculateInverseKinematics(
+            self.objects["arm"],
+            11,
+            target_position,
+            target_rotation,
+            lowerLimits=self.lower_limits,
+            upperLimits=self.upper_limits,
+            jointRanges=self.joint_ranges,
+            restPoses=self.rest_poses,
+        )
 
         # TODO check the value ranges (making the joint angles larger could help)
 
@@ -366,7 +357,7 @@ class SimEnv:
                 self.objects["red_dot_id"], desired_pos, desired_rot
             )
         # move the robot
-        self._move_to_target_position_and_orientation(desired_pos, desired_rot)
+        self._move_to_target_position_and_rotation(desired_pos, desired_rot)
         if self.config.VERBOSITY > 1:
             if "red_dot_id" in self.objects:
                 p.removeBody(self.objects["red_dot_id"])

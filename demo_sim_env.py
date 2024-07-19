@@ -43,6 +43,8 @@ class DemoSimEnv(SimEnv):
             ord("e"): lambda: self.stop_recording(),  # stop recording
             ord("r"): lambda: self.replay_last_demo(),  # replay demo
             ord("t"): lambda: self.reset(),  # reset
+            ord("."): lambda: self.store_state(),
+            ord(","): lambda: self.load_last_state(),
         }
 
     def fast_move(self, position, rotation):
@@ -54,23 +56,32 @@ class DemoSimEnv(SimEnv):
         joint_positions = p.calculateInverseKinematics(
             self.objects["arm"], 11, position, rotation
         )
-        p.setJointMotorControlArray(
-            self.objects["arm"],
-            [i for i in range(9)],
-            p.POSITION_CONTROL,
-            targetPositions=joint_positions,
-        )
+        self.set_joint_positions_and_velocities(joint_positions)
+
+    def set_joint_positions_and_velocities(
+        self, joint_positions, joint_velocities=None
+    ):
+        if joint_velocities is not None:
+            p.setJointMotorControlArray(
+                self.objects["arm"],
+                list(range(len(joint_positions))),
+                p.POSITION_CONTROL,
+                targetPositions=joint_positions,
+                targetVelocities=joint_velocities,
+            )
+        else:
+            p.setJointMotorControlArray(
+                self.objects["arm"],
+                list(range(len(joint_positions))),
+                p.POSITION_CONTROL,
+                targetPositions=joint_positions,
+            )
 
     def fast_move_to_home(self):
         """
         Move the arm to the home position.
         """
-        p.setJointMotorControlArray(
-            self.objects["arm"],
-            list(range(p.getNumJoints(self.objects["arm"]))),
-            p.POSITION_CONTROL,
-            targetPositions=self.config.ARM_HOME_POSITION,
-        )
+        self.set_joint_positions_and_velocities(self.config.ARM_HOME_POSITION)
         for _ in range(100):
             p.stepSimulation()
 
@@ -314,7 +325,7 @@ class DemoSimEnv(SimEnv):
                 self.close_gripper()
             p.stepSimulation()
             if self.config.USE_GUI:
-                time.sleep(1.0 / 2400.0)
+                time.sleep(1.0 / 240.0)
             success = success or self.determine_grasp_success()
 
         p.removeUserDebugItem(self.objects["replaying_text"])
@@ -427,6 +438,56 @@ class DemoSimEnv(SimEnv):
 
         return images, depth_buffers
 
+    def store_state(self):
+        if self.recently_triggered > 0:
+            return
+        self.recently_triggered = 10
+        # store a JSON file in BASE_DIR/transfers which allows for loading the env and quick replay
+        data = {
+            "object": p.getBasePositionAndOrientation(self.objects["object"]),
+            "arm": p.getBasePositionAndOrientation(self.objects["arm"]),
+            "joints": p.getJointStates(
+                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
+            ),
+        }
+        i = 0
+        while True:
+            filename = os.path.join(
+                self.config.BASE_DIR, "transfers", f"transfer_{str(i).zfill(3)}.json"
+            )
+            if not os.path.exists(filename):
+                break
+            i += 1
+        with open(filename, "w") as f:
+            json.dump(data, f)
+
+    def load_last_state(self):
+        directory = os.path.join(self.config.BASE_DIR, "transfers/")
+        latest_time = 0
+        latest_path = None
+        for f in os.listdir(directory):
+            if not f.endswith(".json"):
+                continue
+            if os.path.getmtime(directory + f) > latest_time:
+                latest_time = os.path.getmtime(directory + f)
+                latest_path = directory + f
+        self.load_state(latest_path)
+
+    def load_state(self, state):
+        self.reset()
+        with open(state) as f:
+            data = json.load(f)
+        p.resetBasePositionAndOrientation(self.objects["object"], *data["object"])
+        p.resetBasePositionAndOrientation(self.objects["arm"], *data["arm"])
+        positions, velocities = [], []
+        for i, j in enumerate(data["joints"]):
+            positions.append(j[0])
+            velocities.append(j[1])
+
+        self.set_joint_positions_and_velocities(positions)
+        for _ in range(1000):
+            p.stepSimulation()
+
 
 def record_demo():
     while True:
@@ -445,7 +506,7 @@ if __name__ == "__main__":
     # path_to_urdf = f"duck_vhacd.urdf"
     sim = DemoSimEnv(config, path_to_urdf, 0.7)
 
-    # record_demo()
+    record_demo()
 
-    data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
-    sim.replay_demo(data["demo_velocities"])
+    # data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
+    # sim.replay_demo(data["demo_velocities"])

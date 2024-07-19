@@ -8,6 +8,17 @@ from pybullet_object_models import ycb_objects
 from config import Config
 
 
+def get_path(source):
+    if source == "pybullet_data":
+        return pybullet_data.getDataPath()
+    elif source == "ycb":
+        return ycb_objects.getDataPath()
+    elif source == "test":
+        print("This should only be used for tests")
+        return "tests/"
+    raise ValueError(f"Unknown source '{source}'")
+
+
 class DB:
     def __init__(self, config, name="dino.db"):
         self.config = config
@@ -42,6 +53,7 @@ class DB:
             "object_id INT NOT NULL,"
             "urdf_path VARCHAR(100) NOT NULL,"
             "scale FLOAT NOT NULL,"
+            "source VARCHAR(20) NOT NULL,"
             "FOREIGN KEY (object_id) REFERENCES demonstrations(object_id)"
             ")"
         )
@@ -139,23 +151,17 @@ class DB:
 
     def remove_all_tables(self):
         with self.con:
-            try:
-                self.con.execute("DROP TABLE demonstrations")
-            except sqlite3.OperationalError as e:
-                if str(e).startswith("no such table: "):
-                    pass
-                else:
-                    raise e
-            try:
-                self.con.execute("DROP TABLE transfers")
-            except sqlite3.OperationalError as e:
-                if str(e).startswith("no such table: "):
-                    pass
-                else:
-                    raise e
+            for table in ["demonstrations", "transfers", "urdf_info"]:
+                try:
+                    self.con.execute(f"DROP TABLE {table}")
+                except sqlite3.OperationalError as e:
+                    if str(e).startswith("no such table: "):
+                        pass
+                    else:
+                        raise e
 
-    def add_urdf_info(self, object_name, urdf_path, scale):
-        self._check_paths(urdf_path, ".urdf")
+    def add_urdf_info(self, object_name, urdf_path, scale, source):
+        self._check_paths(os.path.join(get_path(source), urdf_path), ".urdf")
 
         rel_urdf_path = os.path.relpath(urdf_path, "/Users/mikolajdeja/Coding/DINOBot")
 
@@ -170,14 +176,14 @@ class DB:
         if prev is not None:
             with self.con as c:
                 c.execute(
-                    "UPDATE urdf_info SET urdf_path=?, scale=? WHERE object_id=?",
-                    (rel_urdf_path, scale, object_id),
+                    "UPDATE urdf_info SET urdf_path=?, scale=?, source=? WHERE object_id=?",
+                    (rel_urdf_path, scale, source, object_id),
                 )
         else:
             with self.con as c:
                 c.execute(
-                    "INSERT INTO urdf_info VALUES(?, ?, ?)",
-                    (object_id, rel_urdf_path, scale),
+                    "INSERT INTO urdf_info VALUES(?, ?, ?, ?)",
+                    (object_id, rel_urdf_path, scale, source),
                 )
 
     def get_urdf_path(self, object_name):
@@ -188,10 +194,10 @@ class DB:
         ), f"There was no object named {object_id} in the database"
 
         res = self.con.execute(
-            "SELECT urdf_path FROM urdf_info WHERE object_id=?", (object_id,)
+            "SELECT source, urdf_path FROM urdf_info WHERE object_id=?", (object_id,)
         )
         res = res.fetchone()
-        return res[0] if res is not None else None
+        return os.path.join(get_path(res[0]), res[1]) if res is not None else None
 
     def get_urdf_scale(self, object_name):
         object_id = self._get_object_id_by_name(object_name)
@@ -241,59 +247,39 @@ def populate_urdf_info(db):
         insert_ycb_object(db, n, scales.get(n, 1.0))
 
     # pybullet data objects
+    db.add_urdf_info("bike", "bicycle/bike.urdf", 0.1, "pybullet_data")
+    db.add_urdf_info("domino", "domino/domino.urdf", 2.5, "pybullet_data")
+    db.add_urdf_info("duck", "duck_vhacd.urdf", 1.0, "pybullet_data")
+    db.add_urdf_info("jenga", "jenga/jenga.urdf", 1.0, "pybullet_data")
     db.add_urdf_info(
-        "bike", os.path.join(pybullet_data.getDataPath(), "bicycle/bike.urdf"), 0.1
+        "mini_cheetah", "mini_cheetah/mini_cheetah.urdf", 0.25, "pybullet_data"
     )
-    db.add_urdf_info(
-        "domino", os.path.join(pybullet_data.getDataPath(), "domino/domino.urdf"), 2.5
-    )
-    db.add_urdf_info(
-        "duck", os.path.join(pybullet_data.getDataPath(), "duck_vhacd.urdf"), 1.0
-    )
-    db.add_urdf_info(
-        "jenga", os.path.join(pybullet_data.getDataPath(), "jenga/jenga.urdf"), 1.0
-    )
-    db.add_urdf_info(
-        "mini_cheetah",
-        os.path.join(pybullet_data.getDataPath(), "mini_cheetah/mini_cheetah.urdf"),
-        0.25,
-    )
-    db.add_urdf_info(
-        "minitaur",
-        os.path.join(pybullet_data.getDataPath(), "quadruped/minitaur.urdf"),
-        0.25,
-    )
-    db.add_urdf_info(
-        "mug", os.path.join(pybullet_data.getDataPath(), "urdf/mug.urdf"), 1.0
-    )
-    db.add_urdf_info(
-        "racecar",
-        os.path.join(pybullet_data.getDataPath(), "racecar/racecar.urdf"),
-        0.2,
-    )
+    db.add_urdf_info("minitaur", "quadruped/minitaur.urdf", 0.25, "pybullet_data")
+    db.add_urdf_info("mug", "urdf/mug.urdf", 1.0, "pybullet_data")
+    db.add_urdf_info("racecar", "racecar/racecar.urdf", 0.2, "pybullet_data")
 
 
 def insert_ycb_object(db, obj_name, scale=1.0):
-    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    path_to_urdf = os.path.join(obj_name, "model.urdf")
     snake_case_name = re.sub(r"(?<!^)(?=[A-Z])", "_", obj_name).lower()[4:]
-    db.add_urdf_info(snake_case_name, path_to_urdf, scale)
+    db.add_urdf_info(snake_case_name, path_to_urdf, scale, "ycb")
 
 
-if __name__ == "__main__":
-    config = Config()
+def create_and_populate_db(config):
     db = DB(config)
-
     db.remove_all_tables()
     db.create_tables()
-
     base_dir = "demonstrations/"
-
     for f in os.listdir(base_dir):
         if not f.endswith(".json"):
             continue
         object_name = "_".join(f.split("_")[1:])[:-5]
         db.add_demo(object_name, base_dir + f)
-
     populate_urdf_info(db)
+    return db
 
+
+if __name__ == "__main__":
+    config = Config()
+    db = create_and_populate_db(config)
     print(db.get_all_object_names())

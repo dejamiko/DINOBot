@@ -1,5 +1,5 @@
 from config import Config
-from database import DB
+from database import create_and_populate_db
 from dinobot import run_dino_once
 
 if __name__ == "__main__":
@@ -7,7 +7,8 @@ if __name__ == "__main__":
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
-    db = DB(config)
+    config.RUN_LOCALLY = False
+    db = create_and_populate_db(config)
 
     names = db.get_all_object_names()
 
