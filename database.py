@@ -2,6 +2,7 @@ import os
 import re
 import sqlite3
 
+import numpy as np
 import pybullet_data
 from pybullet_object_models import ycb_objects
 
@@ -54,6 +55,12 @@ class DB:
             "urdf_path VARCHAR(100) NOT NULL,"
             "scale FLOAT NOT NULL,"
             "source VARCHAR(20) NOT NULL,"
+            "position_x FLOAT NOT NULL,"
+            "position_y FLOAT NOT NULL,"
+            "position_z FLOAT NOT NULL,"
+            "rotation_r FLOAT NOT NULL,"
+            "rotation_p FLOAT NOT NULL,"
+            "rotation_y FLOAT NOT NULL,"
             "FOREIGN KEY (object_id) REFERENCES demonstrations(object_id)"
             ")"
         )
@@ -160,7 +167,15 @@ class DB:
                     else:
                         raise e
 
-    def add_urdf_info(self, object_name, urdf_path, scale, source):
+    def add_urdf_info(
+        self,
+        object_name,
+        urdf_path,
+        source,
+        scale=1.0,
+        position=(0, 0, 0),
+        rotation=(0, 0, 0),
+    ):
         self._check_paths(os.path.join(get_path(source), urdf_path), ".urdf")
 
         object_id = self._get_object_id_by_name(object_name)
@@ -174,14 +189,18 @@ class DB:
         if prev is not None:
             with self.con as c:
                 c.execute(
-                    "UPDATE urdf_info SET urdf_path=?, scale=?, source=? WHERE object_id=?",
-                    (urdf_path, scale, source, object_id),
+                    "UPDATE urdf_info "
+                    "SET urdf_path=?, scale=?, source=?, "
+                    "position_x=?, position_y=?, position_z=?, "
+                    "rotation_r=?, rotation_p=?, rotation_y=? "
+                    "WHERE object_id=?",
+                    (urdf_path, scale, source, *position, *rotation, object_id),
                 )
         else:
             with self.con as c:
                 c.execute(
-                    "INSERT INTO urdf_info VALUES(?, ?, ?, ?)",
-                    (object_id, urdf_path, scale, source),
+                    "INSERT INTO urdf_info VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (object_id, urdf_path, scale, source, *position, *rotation),
                 )
 
     def get_urdf_path(self, object_name):
@@ -210,6 +229,34 @@ class DB:
         res = res.fetchone()
         return res[0] if res is not None else None
 
+    def get_urdf_position(self, object_name):
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_id} in the database"
+
+        res = self.con.execute(
+            "SELECT position_x, position_y, position_z FROM urdf_info WHERE object_id=?",
+            (object_id,),
+        )
+        res = res.fetchone()
+        return res
+
+    def get_urdf_rotation(self, object_name):
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_id} in the database"
+
+        res = self.con.execute(
+            "SELECT rotation_r, rotation_p, rotation_y FROM urdf_info WHERE object_id=?",
+            (object_id,),
+        )
+        res = res.fetchone()
+        return res
+
     def get_all_object_names(self):
         res = self.con.execute(
             "SELECT object_name "
@@ -219,6 +266,19 @@ class DB:
         )
         return [r[0] for r in res.fetchall()]
 
+    def get_urdf_object_info(self, object_name):
+        object_id = self._get_object_id_by_name(object_name)
+
+        assert (
+            object_id is not None
+        ), f"There was no object named {object_id} in the database"
+
+        return (
+            self.get_urdf_scale(object_name),
+            self.get_urdf_position(object_name),
+            self.get_urdf_rotation(object_name),
+        )
+
 
 def populate_urdf_info(db):
     # YCB objects
@@ -226,7 +286,6 @@ def populate_urdf_info(db):
         "YcbBanana",
         "YcbChipsCan",
         "YcbCrackerBox",
-        "YcbFoamBrick",
         "YcbGelatinBox",
         "YcbHammer",
         "YcbMasterChefCan",
@@ -239,28 +298,43 @@ def populate_urdf_info(db):
         "YcbTomatoSoupCan",
     ]
 
-    scales = {"YcbChipsCan": 0.7}
+    scales = {
+        "YcbChipsCan": 0.7,
+        "YcbCrackerBox": 0.7,
+        "YcbGelatinBox": 1.5,
+    }
 
     for n in names:
         insert_ycb_object(db, n, scales.get(n, 1.0))
 
     # pybullet data objects
-    db.add_urdf_info("bike", "bicycle/bike.urdf", 0.1, "pybullet_data")
-    db.add_urdf_info("domino", "domino/domino.urdf", 2.5, "pybullet_data")
-    db.add_urdf_info("duck", "duck_vhacd.urdf", 1.0, "pybullet_data")
-    db.add_urdf_info("jenga", "jenga/jenga.urdf", 1.0, "pybullet_data")
+    db.add_urdf_info("bike", "bicycle/bike.urdf", "pybullet_data", 0.05)
+    db.add_urdf_info("domino", "domino/domino.urdf", "pybullet_data", 2.5)
+    db.add_urdf_info("jenga", "jenga/jenga.urdf", "pybullet_data", 1.0)
     db.add_urdf_info(
-        "mini_cheetah", "mini_cheetah/mini_cheetah.urdf", 0.25, "pybullet_data"
+        "mini_cheetah",
+        "mini_cheetah/mini_cheetah.urdf",
+        "pybullet_data",
+        0.25,
+        (0, 0, 0),
+        (0, np.pi, 0),
     )
-    db.add_urdf_info("minitaur", "quadruped/minitaur.urdf", 0.25, "pybullet_data")
-    db.add_urdf_info("mug", "urdf/mug.urdf", 1.0, "pybullet_data")
-    db.add_urdf_info("racecar", "racecar/racecar.urdf", 0.2, "pybullet_data")
+    db.add_urdf_info("minitaur", "quadruped/minitaur.urdf", "pybullet_data", 0.25)
+    db.add_urdf_info("mug", "urdf/mug.urdf", "pybullet_data", 0.8)
+    db.add_urdf_info(
+        "132",
+        "random_urdfs/132/132.urdf",
+        "pybullet_data",
+        1,
+        (0, 0, 0),
+        (0, 0, np.pi / 2),
+    )
 
 
 def insert_ycb_object(db, obj_name, scale=1.0):
     path_to_urdf = obj_name + "/model.urdf"
     snake_case_name = re.sub(r"(?<!^)(?=[A-Z])", "_", obj_name).lower()[4:]
-    db.add_urdf_info(snake_case_name, path_to_urdf, scale, "ycb")
+    db.add_urdf_info(snake_case_name, path_to_urdf, "ycb", scale)
 
 
 def create_and_populate_db(config):

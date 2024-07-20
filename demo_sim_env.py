@@ -4,18 +4,19 @@ import time
 
 import numpy as np
 import pybullet as p
-from pybullet_object_models import ycb_objects
+import pybullet_data
 from scipy.spatial.transform import Rotation
 
 from config import Config
+from database import create_and_populate_db
 from sim_env import SimEnv
 
 
 class DemoSimEnv(SimEnv):
-    def __init__(self, config, object_path, scale=1.0):
+    def __init__(self, config, object_path, scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)):
         super(DemoSimEnv, self).__init__(config)
         self.gripper_open = False
-        self.object_info = (object_path, scale)
+        self.object_info = (object_path, scale, offset, rot)
         self.recording = False
         self.recording_start_pos_and_rot = None
         self.recorded_data = []
@@ -42,8 +43,8 @@ class DemoSimEnv(SimEnv):
             ord("q"): lambda: self.start_recording(),  # start recording
             ord("e"): lambda: self.stop_recording(),  # stop recording
             ord("r"): lambda: self.replay_last_demo(),  # replay demo
-            ord("t"): lambda: self.reset(),  # reset
-            ord("."): lambda: self.store_state(),
+            ord("t"): lambda: self.reset_keyboard(),  # reset
+            ord("."): lambda: self.store_state_keyboard(),
             ord(","): lambda: self.load_last_state(),
         }
 
@@ -325,24 +326,27 @@ class DemoSimEnv(SimEnv):
                 self.close_gripper()
             p.stepSimulation()
             if self.config.USE_GUI:
-                time.sleep(1.0 / 240.0)
+                time.sleep(1.0 / 2400.0)
             success = success or self.determine_grasp_success()
 
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
         return success
 
+    def reset_keyboard(self):
+        if self.recently_triggered > 0:
+            return
+        self.recently_triggered = 10
+        self.reset()
+
     def reset(self):
         """
         Reset the simulation.
         """
-        if self.recently_triggered > 0:
-            return
         super(DemoSimEnv, self).reset()
         self.gripper_open = False
         self.recording = False
         self.recorded_data = []
-        self.recently_triggered = 10
         self.load_object(*self.object_info)
 
     @staticmethod
@@ -374,7 +378,7 @@ class DemoSimEnv(SimEnv):
         """
         # check if the object is higher than the table
         pos, _ = p.getBasePositionAndOrientation(self.objects["object"])
-        if pos[2] < self.config.OBJECT_X_Y_Z_BASE[2] + 0.1:
+        if pos[2] < self.config.OBJECT_X_Y_Z_BASE[2] + 0.2:
             return False
         return True
 
@@ -438,10 +442,13 @@ class DemoSimEnv(SimEnv):
 
         return images, depth_buffers
 
-    def store_state(self):
+    def store_state_keyboard(self):
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
+        self.store_state()
+
+    def store_state(self, base_object=None, target_object=None):
         # store a JSON file in BASE_DIR/transfers which allows for loading the env and quick replay
         data = {
             "object": p.getBasePositionAndOrientation(self.objects["object"]),
@@ -449,12 +456,22 @@ class DemoSimEnv(SimEnv):
             "joints": p.getJointStates(
                 self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
             ),
+            "seed": self.config.SEED,
         }
         i = 0
         while True:
-            filename = os.path.join(
-                self.config.BASE_DIR, "transfers", f"transfer_{str(i).zfill(3)}.json"
-            )
+            if base_object is not None:
+                filename = os.path.join(
+                    self.config.BASE_DIR,
+                    "transfers",
+                    f"transfer_{base_object}_{target_object}_{str(i).zfill(3)}.json",
+                )
+            else:
+                filename = os.path.join(
+                    self.config.BASE_DIR,
+                    "transfers",
+                    f"transfer_{str(i).zfill(3)}.json",
+                )
             if not os.path.exists(filename):
                 break
             i += 1
@@ -477,6 +494,7 @@ class DemoSimEnv(SimEnv):
         self.reset()
         with open(state) as f:
             data = json.load(f)
+        self.config.SEED = data["seed"]
         p.resetBasePositionAndOrientation(self.objects["object"], *data["object"])
         p.resetBasePositionAndOrientation(self.objects["arm"], *data["arm"])
         positions, velocities = [], []
@@ -484,8 +502,12 @@ class DemoSimEnv(SimEnv):
             positions.append(j[0])
             velocities.append(j[1])
 
-        self.set_joint_positions_and_velocities(positions)
-        for _ in range(1000):
+        self.set_joint_positions_and_velocities(positions, velocities)
+        self.pause()
+
+    @staticmethod
+    def pause():
+        for _ in range(10000):
             p.stepSimulation()
 
 
@@ -501,12 +523,21 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 0
-    obj_name = "YcbChipsCan"
-    path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    # path_to_urdf = f"duck_vhacd.urdf"
-    sim = DemoSimEnv(config, path_to_urdf, 0.7)
+    db = create_and_populate_db(config)
+    config.VERBOSITY = 1
+    target_object = "racecar"
+    # sim = DemoSimEnv(config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object), (-0.05, 0, 0),
+    #                  (0, 0, 0))
+
+    sim = DemoSimEnv(
+        config,
+        pybullet_data.getDataPath() + "/random_urdfs/132/132.urdf",
+        1,
+        (0, 0, 0),
+        (0, 0, np.pi / 2),
+    )
 
     record_demo()
 
-    # data = sim.load_demonstration("demonstrations/demonstration_chips_can.json")
+    # data = sim.load_demonstration("demonstrations/demonstration_mini_cheetah.json")
     # sim.replay_demo(data["demo_velocities"])

@@ -90,7 +90,9 @@ class SimEnv:
         home_position = self.config.ARM_HOME_POSITION
         self._move_to_target_joint_position(home_position)
 
-    def load_object(self, object_path="jenga/jenga.urdf", scale=1.0):
+    def load_object(
+        self, object_path="jenga/jenga.urdf", scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)
+    ):
         """
         Load an object on the table and move the arm so the camera can see it.
         :param object_path: the path to the object URDF file
@@ -113,8 +115,8 @@ class SimEnv:
         )
         self.objects[f"object"] = p.loadURDF(
             object_path,
-            [pos_x, pos_y, z_base],
-            p.getQuaternionFromEuler([0, 0, angle]),
+            offset + np.array((pos_x, pos_y, z_base)),
+            p.getQuaternionFromEuler(rot + np.array((0, 0, angle))),
             globalScaling=scale,
         )
 

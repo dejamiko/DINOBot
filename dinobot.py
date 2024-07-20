@@ -167,7 +167,7 @@ def set_up_images_directory(config):
     return new_directory
 
 
-def deploy_dinobot(env, data, config, image_directory):
+def deploy_dinobot(env, data, config, image_directory, base_object, target_object):
     """
     Run the main dinobot loop with a single object
     :param env: The environment in which the robot is operating
@@ -257,10 +257,11 @@ def deploy_dinobot(env, data, config, image_directory):
 
         if counter > config.TRIES_LIMIT:
             print("Reached tries limit")
-            return False
+            break
 
+    env.pause()
     # before replay, store the current state, so it can be reloaded and replayed
-    env.store_state()
+    env.store_state(base_object, target_object)
     # Once error is small enough, replay demo.
     return env.replay_demo(demo_velocities), counter
 
@@ -323,12 +324,15 @@ def run_dino_once(config, db, target_object, base_object):
         image_directory = set_up_images_directory(config)
 
         env = DemoSimEnv(
-            config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object)
+            config,
+            db.get_urdf_path(target_object),
+            *db.get_urdf_object_info(target_object),
         )
         data = env.load_demonstration(db.get_demo_for_object(base_object))
 
-        env.reset()
-        success, tries = deploy_dinobot(env, data, config, image_directory)
+        success, tries = deploy_dinobot(
+            env, data, config, image_directory, base_object, target_object
+        )
         env.disconnect()
         if not config.USE_GUI:
             clear_images(image_directory)
@@ -347,6 +351,7 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    config.SEED = 3
+    config.SEED = 0
     db = create_and_populate_db(config)
-    success = run_dino_once(config, db, "banana", "banana")
+    success = run_dino_once(config, db, "mini_cheetah", "mini_cheetah")
+    print(success)
