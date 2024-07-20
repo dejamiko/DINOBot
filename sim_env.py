@@ -88,7 +88,7 @@ class SimEnv:
         Move the arm to the home position.
         """
         home_position = self.config.ARM_HOME_POSITION
-        self._move_to_target_joint_position(home_position)
+        self.move_to_target_joint_position(home_position)
 
     def load_object(
         self, object_path="jenga/jenga.urdf", scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)
@@ -294,9 +294,9 @@ class SimEnv:
             )
             # TODO THIS DOESN'T NEED TO BE AT THE END (getJointInfo can help with this)
 
-        self._move_to_target_joint_position(target_joint_positions)
+        self.move_to_target_joint_position(target_joint_positions)
 
-    def _move_to_target_joint_position(self, target_joint_positions):
+    def move_to_target_joint_position(self, target_joint_positions):
         """
         Move the arm to the target joint positions.
         :param target_joint_positions: the target joint positions
@@ -499,6 +499,14 @@ class SimEnv:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
             self.objects.pop("points_debug_3d")
         self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, colours, 5)
+
+    def get_current_joint_positions(self):
+        return [
+            x[0]
+            for x in p.getJointStates(
+                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
+            )
+        ]
 
 
 if __name__ == "__main__":

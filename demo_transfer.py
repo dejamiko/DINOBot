@@ -45,14 +45,15 @@ def run_cross_experiment():
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
-    config.RUN_LOCALLY = True
+    config.RUN_LOCALLY = False
     db = create_and_populate_db(config)
 
     names = db.get_all_object_names()
 
-    num_tries = 10
+    num_tries = 1
     for base in names:
         for target in names:
+            all_tries = []
             success_count = 0
             for s in range(find_first(base, target, config, num_tries), num_tries):
                 config.SEED = s
@@ -61,8 +62,13 @@ def run_cross_experiment():
                 )
                 if success:
                     success_count += 1
+                all_tries.append(tries)
+            if len(all_tries) == 0:
+                print(f"Skipped {base}->{target}")
+                continue
             print(
-                f"For transfer {base}->{target}: {success_count}/{num_tries} success rate"
+                f"For transfer {base}->{target}: {success_count}/{num_tries} success rate with "
+                f"{sum(all_tries) / len(all_tries)} steps on average"
             )
 
 

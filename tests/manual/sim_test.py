@@ -3,9 +3,9 @@ import os
 import numpy as np
 import pybullet as p
 from pybullet_object_models import ycb_objects
-from sim_env import SimEnv
 
 from config import Config
+from sim_env import SimEnv
 
 
 def move_to_home(func):

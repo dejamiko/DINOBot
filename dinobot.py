@@ -197,7 +197,14 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
     error = np.inf
     counter = 0
     num_patches, descriptor_vectors, points1_2d = None, None, None
+    best_alignment_joint_position = None
+    smallest_error = None
     while error > config.ERR_THRESHOLD:
+        counter += 1
+        if counter > config.TRIES_LIMIT:
+            print("Reached tries limit")
+            break
+
         # Collect observations at the current pose.
         rgb_live, depth_live = env.get_rgbd_image()
         rgb_live_path = save_rgb_image(rgb_live, "live", image_directory)
@@ -245,7 +252,12 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
         if config.VERBOSITY > 0:
             print(f"Error: {error}, time taken: {time_taken}")
 
+        if smallest_error is None or error < smallest_error:
+            smallest_error = error
+            best_alignment_joint_position = env.get_current_joint_positions()
+
         if error < config.ERR_THRESHOLD:
+            # we can stop, the alignment is good enough
             break
 
         # Find rigid translation and rotation that aligns the points by minimising error, using SVD.
@@ -253,12 +265,8 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
 
         # Move robot
         env.move_in_camera_frame(t, R)
-        counter += 1
 
-        if counter > config.TRIES_LIMIT:
-            print("Reached tries limit")
-            break
-
+    env.move_to_target_joint_position(best_alignment_joint_position)
     env.pause()
     # before replay, store the current state, so it can be reloaded and replayed
     env.store_state(base_object, target_object)
@@ -353,5 +361,5 @@ if __name__ == "__main__":
     config.DRAW_CORRESPONDENCES = True
     config.SEED = 0
     db = create_and_populate_db(config)
-    success = run_dino_once(config, db, "mini_cheetah", "mini_cheetah")
+    success = run_dino_once(config, db, "banana", "132")
     print(success)

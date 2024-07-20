@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 import pybullet as p
-import pybullet_data
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -525,16 +524,13 @@ if __name__ == "__main__":
     config.VERBOSITY = 0
     db = create_and_populate_db(config)
     config.VERBOSITY = 1
-    target_object = "racecar"
-    # sim = DemoSimEnv(config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object), (-0.05, 0, 0),
-    #                  (0, 0, 0))
-
+    target_object = "tomato_soup_can"
     sim = DemoSimEnv(
         config,
-        pybullet_data.getDataPath() + "/random_urdfs/132/132.urdf",
-        1,
+        db.get_urdf_path(target_object),
+        db.get_urdf_scale(target_object),
         (0, 0, 0),
-        (0, 0, np.pi / 2),
+        (0, 0, 0),
     )
 
     record_demo()
