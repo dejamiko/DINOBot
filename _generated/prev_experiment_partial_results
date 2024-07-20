@@ -1,0 +1,49 @@
+For transfer 132->132: 10/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Exception raised The 'n_clusters' parameter of KMeans must be an int in the range [1, inf). Got 0 instead.
+Reached tries limit
+For transfer 132->banana: 7/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+For transfer 132->bike: 8/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Exception raised The 'n_clusters' parameter of KMeans must be an int in the range [1, inf). Got 0 instead.
+Reached tries limit
+For transfer 132->chips_can: 1/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+For transfer 132->cracker_box: 10/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+For transfer 132->domino: 4/10 success rate
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+Reached tries limit
+For transfer 132->gelatin_box: 10/10 success rate
+Reached tries limit
+For transfer 132->hammer: 7/10 success rate

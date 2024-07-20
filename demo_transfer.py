@@ -50,7 +50,7 @@ def run_cross_experiment():
 
     names = db.get_all_object_names()
 
-    num_tries = 1
+    num_tries = 10
     for base in names:
         for target in names:
             all_tries = []
