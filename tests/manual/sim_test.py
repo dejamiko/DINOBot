@@ -6,6 +6,7 @@ from pybullet_object_models import ycb_objects
 
 from config import Config
 from sim_env import SimEnv
+from task_types import Task
 
 
 def move_to_home(func):
@@ -48,7 +49,7 @@ def move_and_rotate_test(env):
 @reset
 @move_to_home
 def load_normal_pybullet_objects_test(env):
-    env.load_object("objects/mug.urdf")
+    env.load_object(Task.GRASPING.value, "objects/mug.urdf")
 
 
 @reset
@@ -56,13 +57,12 @@ def load_normal_pybullet_objects_test(env):
 def load_pybullet_object_models_test(env):
     obj_name = "YcbBanana"
     path_to_urdf = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    env.load_object(path_to_urdf)
+    env.load_object(Task.GRASPING.value, path_to_urdf)
 
 
 if __name__ == "__main__":
     config = Config()
     config.VERBOSITY = 2
-    config.TAKE_IMAGE_AT_EVERY_STEP = True
     environment = SimEnv(config)
 
     move_and_rotate_test(environment)

@@ -1,10 +1,10 @@
 import os
-import sqlite3
 
 import pytest
 
 from config import Config
 from database import DB
+from task_types import Task
 
 
 @pytest.fixture
@@ -17,200 +17,187 @@ def db_fixture():
     os.remove(os.path.join(config.BASE_DIR, "test.db"))
 
 
+def test_add_object_works(db_fixture):
+    db_fixture.add_object("object_name_1", "_test_assets/urdf1.urdf", "test")
+
+
 @pytest.fixture
-def db_with_demos_fixture(db_fixture):
-    db_fixture.add_demo("object_name1", "tests/_test_assets/demo1.json")
-    db_fixture.add_demo("object_name2", "tests/_test_assets/demo2.json")
-    yield db_fixture
+def db_fixture_objects(db_fixture):
+    db_fixture.add_object("object_name_1", "_test_assets/urdf1.urdf", "test")
+    db_fixture.add_object("object_name_2", "_test_assets/urdf2.urdf", "test")
+    return db_fixture
 
 
-def test_can_add_demos(db_fixture):
-    db_fixture.add_demo("object_name1", "tests/_test_assets/demo1.json")
-    db_fixture.add_demo("object_name2", "tests/_test_assets/demo2.json")
-
-
-def test_object_demo_path_is_unique(db_with_demos_fixture):
-    with pytest.raises(sqlite3.IntegrityError) as e:
-        db_with_demos_fixture.add_demo("object_name3", "tests/_test_assets/demo1.json")
-    assert str(e.value) == "UNIQUE constraint failed: demonstrations.demo_path"
-
-
-def test_get_demo_works(db_with_demos_fixture):
-    assert (
-        db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/_test_assets/demo1.json"
-    )
-
-
-def test_adding_with_existing_object_name_updates(db_with_demos_fixture):
-    assert (
-        db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/_test_assets/demo1.json"
-    )
-    db_with_demos_fixture.add_demo("object_name1", "tests/_test_assets/demo3.json")
-    assert (
-        db_with_demos_fixture.get_demo_for_object("object_name1")
-        == "tests/_test_assets/demo3.json"
-    )
-
-
-def test_get_all_names_works(db_with_demos_fixture):
-    assert db_with_demos_fixture.get_all_object_names() == [
-        "object_name1",
-        "object_name2",
-    ]
-
-
-def test_get_all_names_ignores_old(db_with_demos_fixture):
-    db_with_demos_fixture.add_demo("object_name_old1", "tests/_test_assets/demo3.json")
-    assert db_with_demos_fixture.get_all_object_names() == [
-        "object_name1",
-        "object_name2",
-    ]
-
-
-def test_add_transfer_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.1)
-
-
-def test_get_success_rate_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.1)
-    assert (
-        db_with_demos_fixture.get_success_rate_for_objects(
-            "object_name1", "object_name2"
-        )
-        == 0.1
-    )
-
-
-def test_get_success_rate_for_wrong_name_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.get_success_rate_for_objects(
-            "object_name3", "object_name1"
-        )
-
-
-def test_add_transfer_for_existing_objects_updates(db_with_demos_fixture):
-    db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.1)
-    assert (
-        db_with_demos_fixture.get_success_rate_for_objects(
-            "object_name1", "object_name2"
-        )
-        == 0.1
-    )
-    db_with_demos_fixture.add_transfer("object_name1", "object_name2", 0.7)
-    assert (
-        db_with_demos_fixture.get_success_rate_for_objects(
-            "object_name1", "object_name2"
-        )
-        == 0.7
-    )
-
-
-def test_add_urdf_info_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test"
-    )
-    db_with_demos_fixture.add_urdf_info(
-        "object_name2", "_test_assets/urdf2.urdf", "test"
-    )
-
-
-def test_add_urdf_info_with_wrong_path_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.add_urdf_info(
-            "object_name1", "_test_assets/urdf3.urdf", "test"
-        )
-
-
-def test_add_urdf_info_with_wrong_extension_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.add_urdf_info(
-            "object_name1", "_test_assets/demo1.json", "test"
-        )
-
-
-def test_get_urdf_path_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test"
-    )
-    assert (
-        db_with_demos_fixture.get_urdf_path("object_name1")
-        == "tests/_test_assets/urdf1.urdf"
-    )
-
-
-def test_get_urdf_scale_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test", 1.23
-    )
-    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.23
-
-
-def test_get_urdf_position_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test", position=(1, 2, 3)
-    )
-    assert db_with_demos_fixture.get_urdf_position("object_name1") == (1, 2, 3)
-
-
-def test_get_urdf_rotation_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test", rotation=(1, 2, 3)
-    )
-    assert db_with_demos_fixture.get_urdf_rotation("object_name1") == (1, 2, 3)
-
-
-def test_get_urdf_object_info_works(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1",
-        "_test_assets/urdf1.urdf",
-        "test",
-        scale=1.23,
-        position=(1, 2, 3),
-        rotation=(1.1, 2.2, 3.3),
-    )
-    assert db_with_demos_fixture.get_urdf_object_info("object_name1") == (
+def test_add_demo_works(db_fixture_objects):
+    db_fixture_objects.add_demo(
+        "object_name_1",
+        Task.GRASPING.value,
+        "tests/_test_assets/demo1.json",
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
     )
 
 
-def test_get_urdf_path_for_wrong_name_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.get_urdf_path("object_name3")
+def test_add_transfer_works(db_fixture_objects):
+    db_fixture_objects.add_transfer(
+        "object_name_1", "object_name_2", Task.GRASPING.value, 0.123
+    )
 
 
-def test_get_urdf_scale_for_wrong_name_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.get_urdf_scale("object_name3")
+@pytest.fixture
+def db_fixture_pop(db_fixture_objects):
+    db_fixture_objects.add_demo(
+        "object_name_1",
+        Task.GRASPING.value,
+        "tests/_test_assets/demo1.json",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    db_fixture_objects.add_demo(
+        "object_name_2",
+        Task.GRASPING.value,
+        "tests/_test_assets/demo2.json",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    db_fixture_objects.add_demo(
+        "object_name_1",
+        Task.PUSHING.value,
+        "tests/_test_assets/demo3.json",
+    )
+    db_fixture_objects.add_demo(
+        "object_name_2",
+        Task.PUSHING.value,
+        "tests/_test_assets/demo4.json",
+    )
+    db_fixture_objects.add_transfer(
+        "object_name_1", "object_name_2", Task.GRASPING.value, 0.123
+    )
+    db_fixture_objects.add_transfer(
+        "object_name_1", "object_name_2", Task.PUSHING.value, 0.321
+    )
+    return db_fixture_objects
 
 
-def test_get_urdf_position_for_wrong_name_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.get_urdf_position("object_name3")
-
-
-def test_get_urdf_rotation_for_wrong_name_fails(db_with_demos_fixture):
-    with pytest.raises(AssertionError):
-        db_with_demos_fixture.get_urdf_rotation("object_name3")
-
-
-def test_add_urdf_info_for_existing_object_updates(db_with_demos_fixture):
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf1.urdf", "test"
+def test_get_demo_works(db_fixture_pop):
+    assert (
+        db_fixture_pop.get_demo("object_name_1", Task.GRASPING.value)
+        == "tests/_test_assets/demo1.json"
     )
     assert (
-        db_with_demos_fixture.get_urdf_path("object_name1")
-        == "tests/_test_assets/urdf1.urdf"
-    )
-    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 1.0
-    db_with_demos_fixture.add_urdf_info(
-        "object_name1", "_test_assets/urdf2.urdf", "test", 2.0
+        db_fixture_pop.get_demo("object_name_2", Task.GRASPING.value)
+        == "tests/_test_assets/demo2.json"
     )
     assert (
-        db_with_demos_fixture.get_urdf_path("object_name1")
-        == "tests/_test_assets/urdf2.urdf"
+        db_fixture_pop.get_demo("object_name_1", Task.PUSHING.value)
+        == "tests/_test_assets/demo3.json"
     )
-    assert db_with_demos_fixture.get_urdf_scale("object_name1") == 2.0
+    assert (
+        db_fixture_pop.get_demo("object_name_2", Task.PUSHING.value)
+        == "tests/_test_assets/demo4.json"
+    )
+
+
+def test_get_load_info(db_fixture_pop):
+    assert db_fixture_pop.get_load_info("object_name_1", Task.GRASPING.value) == (
+        "tests/_test_assets/urdf1.urdf",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    assert db_fixture_pop.get_load_info("object_name_2", Task.GRASPING.value) == (
+        "tests/_test_assets/urdf2.urdf",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    assert db_fixture_pop.get_load_info("object_name_1", Task.PUSHING.value) == (
+        "tests/_test_assets/urdf1.urdf",
+        1.0,
+        (0, 0, 0),
+        (0, 0, 0),
+    )
+    assert db_fixture_pop.get_load_info("object_name_2", Task.PUSHING.value) == (
+        "tests/_test_assets/urdf2.urdf",
+        1.0,
+        (0, 0, 0),
+        (0, 0, 0),
+    )
+
+
+def test_get_success_rate_works(db_fixture_pop):
+    assert (
+        db_fixture_pop.get_success_rate(
+            "object_name_1", "object_name_2", Task.GRASPING.value
+        )
+        == 0.123
+    )
+    assert (
+        db_fixture_pop.get_success_rate(
+            "object_name_1", "object_name_2", Task.PUSHING.value
+        )
+        == 0.321
+    )
+
+
+def test_get_all_object_names_for_task_works(db_fixture_pop):
+    assert db_fixture_pop.get_all_object_names_for_task(Task.PUSHING.value) == [
+        "object_name_1",
+        "object_name_2",
+    ]
+
+
+def test_add_object_with_same_name_updates(db_fixture_pop):
+    assert db_fixture_pop.get_load_info("object_name_1", Task.GRASPING.value) == (
+        "tests/_test_assets/urdf1.urdf",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    db_fixture_pop.add_object("object_name_1", "_test_assets/urdf3.urdf", "test")
+    assert db_fixture_pop.get_load_info("object_name_1", Task.GRASPING.value) == (
+        "tests/_test_assets/urdf3.urdf",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+
+
+def test_add_demo_with_same_name_and_task_updates(db_fixture_pop):
+    assert (
+        db_fixture_pop.get_demo("object_name_1", Task.GRASPING.value)
+        == "tests/_test_assets/demo1.json"
+    )
+    db_fixture_pop.add_demo(
+        "object_name_1",
+        Task.GRASPING.value,
+        "tests/_test_assets/demo5.json",
+        1.23,
+        (1, 2, 3),
+        (1.1, 2.2, 3.3),
+    )
+    assert (
+        db_fixture_pop.get_demo("object_name_1", Task.GRASPING.value)
+        == "tests/_test_assets/demo5.json"
+    )
+
+
+def test_add_transfer_with_same_names_and_task_updates(db_fixture_pop):
+    assert (
+        db_fixture_pop.get_success_rate(
+            "object_name_1", "object_name_2", Task.GRASPING.value
+        )
+        == 0.123
+    )
+    db_fixture_pop.add_transfer(
+        "object_name_1", "object_name_2", Task.GRASPING.value, 0.124
+    )
+    assert (
+        db_fixture_pop.get_success_rate(
+            "object_name_1", "object_name_2", Task.GRASPING.value
+        )
+        == 0.124
+    )

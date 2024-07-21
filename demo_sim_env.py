@@ -4,23 +4,35 @@ import time
 
 import numpy as np
 import pybullet as p
+from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
 from database import create_and_populate_db
 from sim_env import SimEnv
+from task_types import Task
 
 
 class DemoSimEnv(SimEnv):
-    def __init__(self, config, object_path, scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)):
+    def __init__(
+        self,
+        config,
+        task_type: Task,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
+    ):
         super(DemoSimEnv, self).__init__(config)
-        self.gripper_open = False
         self.object_info = (object_path, scale, offset, rot)
+        self.task = task_type
+
+        self.gripper_open = False
         self.recording = False
         self.recording_start_pos_and_rot = None
         self.recorded_data = []
         self.recently_triggered = 10
-        self.load_object(*self.object_info)
+
         self.movement_key_mappings = {
             ord("s"): lambda: (0.01, 0, 0),  # positive x
             ord("x"): lambda: (-0.01, 0, 0),  # negative x
@@ -34,20 +46,184 @@ class DemoSimEnv(SimEnv):
             ord("l"): lambda: (0, -0.02, 0),  # negative pitch
             ord("u"): lambda: (0, 0, 0.02),  # positive yaw
             ord("o"): lambda: (0, 0, -0.02),  # negative yaw
-            ord("n"): lambda: self.open_gripper(),  # open gripper
-            ord("m"): lambda: self.close_gripper(),  # close gripper
+            ord("n"): lambda: self._open_gripper(),  # open gripper
+            ord("m"): lambda: self._close_gripper(),  # close gripper
         }
         self.other_key_mappings = {
-            ord("h"): lambda: self.fast_move_to_home(),  # move to home position
-            ord("q"): lambda: self.start_recording(),  # start recording
-            ord("e"): lambda: self.stop_recording(),  # stop recording
-            ord("r"): lambda: self.replay_last_demo(),  # replay demo
-            ord("t"): lambda: self.reset_keyboard(),  # reset
-            ord("."): lambda: self.store_state_keyboard(),
-            ord(","): lambda: self.load_last_state(),
+            ord("h"): lambda: self._fast_move_to_home(),  # move to home position
+            ord("q"): lambda: self._start_recording(),  # start recording
+            ord("e"): lambda: self._stop_recording(),  # stop recording
+            ord("r"): lambda: self._replay_last_demo(),  # replay the latest demo
+            ord("t"): lambda: self._reset_from_keyboard(),  # reset
+            ord("."): lambda: self._store_state_keyboard(),  # store the current state
+            ord(","): lambda: self._load_last_state(),  # load the last state
         }
 
-    def fast_move(self, position, rotation):
+        self.load_object(task_type, *self.object_info)
+
+    def control_arm_with_keyboard(self):
+        """
+        Control the arm in the simulation using the keyboard.
+        """
+        keys = p.getKeyboardEvents()
+        # I will ignore the flags for now
+        keys = list(keys.keys())
+        self._control_movement_with_keys(keys)
+        self._control_flow_with_keys(keys)
+
+    def replay_demo(self, demo):
+        """
+        Replay a demonstration using relative positions.
+        :param demo: The demonstration to replay.
+        :return: the success of the replayed demonstration.
+        """
+
+        self.recently_triggered = 10
+        # create text on the screen to show that the demo is playing
+        self.objects["replaying_text"] = p.addUserDebugText(
+            "Replaying demo", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
+        )
+
+        success = False
+        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+        pos = np.array(pos)
+        rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
+        for pos_delta, rot_delta, gripper_open in demo:
+            # calculate the actual position and rotation from the current one
+            new_pos = pos + pos_delta
+            new_rot = rot_delta @ rot
+            new_rot = Rotation.from_matrix(new_rot).as_quat(canonical=True)
+
+            if self.config.VERBOSITY > 1:
+                print(f"Replay, move to {new_pos}, {new_rot}")
+
+            self._fast_move(new_pos, new_rot)
+            if gripper_open:
+                self._open_gripper()
+            else:
+                self._close_gripper()
+            p.stepSimulation()
+            if self.config.USE_GUI:
+                time.sleep(1.0 / 2400.0)
+            success = success or self._evaluate_success()
+
+        p.removeUserDebugItem(self.objects["replaying_text"])
+        self.objects.pop("replaying_text")
+        return success
+
+    def reset(self, task_type: Task = None):
+        """
+        Reset the simulation.
+        :param task_type: Optionally provided type of task to perform.
+        """
+        super(DemoSimEnv, self).reset()
+        self.gripper_open = False
+        self.recording = False
+        self.recorded_data = []
+        if task_type is not None:
+            self.task = task_type
+        self.load_object(self.task, *self.object_info)
+
+    @staticmethod
+    def load_demonstration(filename):
+        """
+        Load a demonstration from a file.
+        :param filename: The filename of the demonstration.
+        :return: The demonstration as a dictionary {"images": images, "depth_bn": depth buffers,
+        "demo_positions": the offset positions}
+        """
+        with open(filename, "r") as file:
+            demonstration = json.load(file)
+        images = demonstration["images"]
+        depth_buffers = demonstration["depth_buffers"]
+        for i in range(len(images)):
+            img = np.array(images[i], dtype=np.uint8).reshape(-1, 3)
+            images[i] = img.reshape(int(np.sqrt(img.shape[0])), -1, 3)
+            depth_buffers[i] = np.array(depth_buffers[i])
+        data = {
+            "images": images,
+            "depth_buffers": depth_buffers,
+            "demo_positions": demonstration["recorded_data"],
+        }
+        return data
+
+    def load_state(self, state):
+        self.reset()
+        with open(state) as f:
+            data = json.load(f)
+        self.config.SEED = data["seed"]
+        p.resetBasePositionAndOrientation(self.objects["object"], *data["object"])
+        p.resetBasePositionAndOrientation(self.objects["arm"], *data["arm"])
+        positions, velocities = [], []
+        for i, j in enumerate(data["joints"]):
+            positions.append(j[0])
+            velocities.append(j[1])
+
+        self._set_joint_positions_and_velocities(positions, velocities)
+        self.pause()
+
+    @staticmethod
+    def pause():
+        for _ in range(10000):
+            p.stepSimulation()
+
+    def _control_flow_with_keys(self, keys):
+        """
+        Control the simulation with keys that are not movement keys.
+        :param keys: The keys pressed.
+        """
+        for key in keys:
+            if key in self.other_key_mappings:
+                self.other_key_mappings[key]()
+        if self.recording:
+            pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
+            rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
+
+            f_pos, f_rot = self.recording_start_pos_and_rot
+
+            self.recorded_data.append(
+                (
+                    (np.array(pos) - f_pos).tolist(),
+                    (rot @ np.linalg.inv(f_rot)).tolist(),
+                    self.gripper_open,
+                )
+            )
+        if self.recently_triggered > 0:
+            self.recently_triggered -= 1
+        if not self.gripper_open:
+            self._close_gripper()
+
+    def _control_movement_with_keys(self, keys):
+        """
+        Control the movement of the arm in the simulation with keys.
+        :param keys: The keys pressed.
+        :return: The arm moved in the simulation.
+        """
+        translation = np.array([0.0, 0.0, 0.0])
+        rotation = np.array([0.0, 0.0, 0.0])
+        for key in keys:
+            if key in self.movement_key_mappings:
+                if key in [ord("s"), ord("x"), ord("z"), ord("c"), ord("a"), ord("d")]:
+                    translation += np.array(self.movement_key_mappings[key]())
+                elif key in [
+                    ord("i"),
+                    ord("k"),
+                    ord("j"),
+                    ord("l"),
+                    ord("u"),
+                    ord("o"),
+                ]:
+                    rotation += np.array(self.movement_key_mappings[key]())
+                else:
+                    self.movement_key_mappings[key]()
+        if np.any(translation):
+            self._move_in_xyz(*translation)
+        if np.any(rotation):
+            self._move_in_rpy(*rotation)
+        if not self.gripper_open:
+            self._close_gripper()
+
+    def _fast_move(self, position, rotation):
         """
         Move the arm to a specific position and rotation.
         :param position: The position to move to.
@@ -56,9 +232,9 @@ class DemoSimEnv(SimEnv):
         joint_positions = p.calculateInverseKinematics(
             self.objects["arm"], 11, position, rotation
         )
-        self.set_joint_positions_and_velocities(joint_positions)
+        self._set_joint_positions_and_velocities(joint_positions)
 
-    def set_joint_positions_and_velocities(
+    def _set_joint_positions_and_velocities(
         self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
@@ -77,15 +253,15 @@ class DemoSimEnv(SimEnv):
                 targetPositions=joint_positions,
             )
 
-    def fast_move_to_home(self):
+    def _fast_move_to_home(self):
         """
         Move the arm to the home position.
         """
-        self.set_joint_positions_and_velocities(self.config.ARM_HOME_POSITION)
+        self._set_joint_positions_and_velocities(self.config.ARM_HOME_POSITION)
         for _ in range(100):
             p.stepSimulation()
 
-    def move_in_xyz(self, x, y, z):
+    def _move_in_xyz(self, x, y, z):
         """
         Move the arm in the simulation in the x, y, z directions.
         :param x: The translation in the x direction.
@@ -95,9 +271,9 @@ class DemoSimEnv(SimEnv):
         pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
         current_x, current_y, current_z = pos
         new_x, new_y, new_z = current_x + x, current_y + y, current_z + z
-        self.fast_move((new_x, new_y, new_z), rot)
+        self._fast_move((new_x, new_y, new_z), rot)
 
-    def move_in_rpy(self, roll, pitch, yaw):
+    def _move_in_rpy(self, roll, pitch, yaw):
         """
         Move the arm in the simulation in the roll, pitch, yaw directions.
         :param roll: The rotation in the roll direction.
@@ -112,13 +288,12 @@ class DemoSimEnv(SimEnv):
             current_yaw + yaw,
         )
         new_rot = p.getQuaternionFromEuler([new_roll, new_pitch, new_yaw])
-        self.fast_move(pos, new_rot)
+        self._fast_move(pos, new_rot)
 
-    def close_gripper(self):
+    def _close_gripper(self):
         """
         Close the gripper in the simulation.
         """
-        # TODO Try out the velocity control and lower the force
         p.setJointMotorControl2(
             self.objects["arm"], 9, p.POSITION_CONTROL, targetPosition=0.0, force=1000
         )
@@ -127,7 +302,7 @@ class DemoSimEnv(SimEnv):
         )
         self.gripper_open = False
 
-    def open_gripper(self):
+    def _open_gripper(self):
         """
         Open the gripper in the simulation.
         """
@@ -141,7 +316,7 @@ class DemoSimEnv(SimEnv):
         )
         self.gripper_open = True
 
-    def start_recording(self):
+    def _start_recording(self):
         """
         Start recording the simulation.
         """
@@ -157,12 +332,12 @@ class DemoSimEnv(SimEnv):
             "Recording", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
         )
         self.recorded_data = []
-        images, depth_buffers = self.take_demo_images()
+        images, depth_buffers = self._take_demo_images()
         self.recorded_data.append(len(images))
         for img, depth in zip(images, depth_buffers):
             self.recorded_data.append((img, depth))
 
-    def stop_recording(self):
+    def _stop_recording(self):
         """
         Stop recording the simulation and save the recorded data to a file.
         """
@@ -204,73 +379,7 @@ class DemoSimEnv(SimEnv):
             )
         self.recorded_data = []
 
-    def control_arm(self):
-        """
-        Control the arm in the simulation using the keyboard.
-        """
-        keys = p.getKeyboardEvents()
-        # I will ignore the flags for now
-        keys = list(keys.keys())
-        self.control_movement_with_keys(keys)
-        self.control_other_with_keys(keys)
-
-    def control_other_with_keys(self, keys):
-        """
-        Control the simulation with keys that are not movement keys.
-        :param keys: The keys pressed.
-        """
-        for key in keys:
-            if key in self.other_key_mappings:
-                self.other_key_mappings[key]()
-        if self.recording:
-            pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
-            rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
-
-            f_pos, f_rot = self.recording_start_pos_and_rot
-
-            self.recorded_data.append(
-                (
-                    (np.array(pos) - f_pos).tolist(),
-                    (rot @ np.linalg.inv(f_rot)).tolist(),
-                    self.gripper_open,
-                )
-            )
-        if self.recently_triggered > 0:
-            self.recently_triggered -= 1
-        if not self.gripper_open:
-            self.close_gripper()
-
-    def control_movement_with_keys(self, keys):
-        """
-        Control the movement of the arm in the simulation with keys.
-        :param keys: The keys pressed.
-        :return: The arm moved in the simulation.
-        """
-        translation = np.array([0.0, 0.0, 0.0])
-        rotation = np.array([0.0, 0.0, 0.0])
-        for key in keys:
-            if key in self.movement_key_mappings:
-                if key in [ord("s"), ord("x"), ord("z"), ord("c"), ord("a"), ord("d")]:
-                    translation += np.array(self.movement_key_mappings[key]())
-                elif key in [
-                    ord("i"),
-                    ord("k"),
-                    ord("j"),
-                    ord("l"),
-                    ord("u"),
-                    ord("o"),
-                ]:
-                    rotation += np.array(self.movement_key_mappings[key]())
-                else:
-                    self.movement_key_mappings[key]()
-        if np.any(translation):
-            self.move_in_xyz(*translation)
-        if np.any(rotation):
-            self.move_in_rpy(*rotation)
-        if not self.gripper_open:
-            self.close_gripper()
-
-    def replay_last_demo(self):
+    def _replay_last_demo(self):
         """
         Replay the last recorded demonstration.
         """
@@ -290,87 +399,16 @@ class DemoSimEnv(SimEnv):
 
         if self.config.VERBOSITY > 1:
             print(f"Replaying demo {latest_path}")
-        data = self.load_demonstration(latest_path)["demo_velocities"]
+        data = self.load_demonstration(latest_path)["demo_positions"]
         self.replay_demo(data)
 
-    def replay_demo(self, demo):
-        """
-        Replay a demonstration from a list of keystrokes.
-        :param demo: The demonstration to replay.
-        """
-
-        self.recently_triggered = 10
-        # create text on the screen to show that the demo is playing
-        self.objects["replaying_text"] = p.addUserDebugText(
-            "Replaying demo", [0, 0, 2], textColorRGB=[1, 0, 0], textSize=2
-        )
-
-        success = False
-        pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
-        pos = np.array(pos)
-        rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
-        for pos_delta, rot_delta, gripper_open in demo:
-            # calculate the actual position and rotation from the current one
-            new_pos = pos + pos_delta
-            new_rot = rot_delta @ rot
-            new_rot = Rotation.from_matrix(new_rot).as_quat(canonical=True)
-
-            if self.config.VERBOSITY > 1:
-                print(f"Replay, move to {new_pos}, {new_rot}")
-
-            self.fast_move(new_pos, new_rot)
-            if gripper_open:
-                self.open_gripper()
-            else:
-                self.close_gripper()
-            p.stepSimulation()
-            if self.config.USE_GUI:
-                time.sleep(1.0 / 2400.0)
-            success = success or self.determine_grasp_success()
-
-        p.removeUserDebugItem(self.objects["replaying_text"])
-        self.objects.pop("replaying_text")
-        return success
-
-    def reset_keyboard(self):
+    def _reset_from_keyboard(self):
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
         self.reset()
 
-    def reset(self):
-        """
-        Reset the simulation.
-        """
-        super(DemoSimEnv, self).reset()
-        self.gripper_open = False
-        self.recording = False
-        self.recorded_data = []
-        self.load_object(*self.object_info)
-
-    @staticmethod
-    def load_demonstration(filename):
-        """
-        Load a demonstration from a file.
-        :param filename: The filename of the demonstration.
-        :return: The demonstration as a dictionary.
-        """
-        with open(filename, "r") as file:
-            demonstration = json.load(file)
-        images = demonstration["images"]
-        depth_buffers = demonstration["depth_buffers"]
-        for i in range(len(images)):
-            img = np.array(images[i], dtype=np.uint8).reshape(-1, 3)
-            images[i] = img.reshape(int(np.sqrt(img.shape[0])), -1, 3)
-            depth_buffers[i] = np.array(depth_buffers[i])
-        data = {
-            "rgb_bn": images,
-            "depth_bn": depth_buffers,
-            "demo_velocities": demonstration["recorded_data"],
-        }
-        return data
-
-    def determine_grasp_success(self):
+    def _determine_grasp_success(self):
         """
         Determine if the grasp was successful.
         :return: True if the grasp was successful, False otherwise.
@@ -381,7 +419,13 @@ class DemoSimEnv(SimEnv):
             return False
         return True
 
-    def take_demo_images(self):
+    def _evaluate_success(self):
+        if self.task == Task.GRASPING.value:
+            return self._determine_grasp_success()
+        else:
+            raise NotImplemented()
+
+    def _take_demo_images(self):
         images, depth_buffers = [], []
         img, depth = self.get_rgbd_image()
         images.append(img)
@@ -441,7 +485,7 @@ class DemoSimEnv(SimEnv):
 
         return images, depth_buffers
 
-    def store_state_keyboard(self):
+    def _store_state_keyboard(self):
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
@@ -477,7 +521,7 @@ class DemoSimEnv(SimEnv):
         with open(filename, "w") as f:
             json.dump(data, f)
 
-    def load_last_state(self):
+    def _load_last_state(self):
         directory = os.path.join(self.config.BASE_DIR, "transfers/")
         latest_time = 0
         latest_path = None
@@ -489,30 +533,10 @@ class DemoSimEnv(SimEnv):
                 latest_path = directory + f
         self.load_state(latest_path)
 
-    def load_state(self, state):
-        self.reset()
-        with open(state) as f:
-            data = json.load(f)
-        self.config.SEED = data["seed"]
-        p.resetBasePositionAndOrientation(self.objects["object"], *data["object"])
-        p.resetBasePositionAndOrientation(self.objects["arm"], *data["arm"])
-        positions, velocities = [], []
-        for i, j in enumerate(data["joints"]):
-            positions.append(j[0])
-            velocities.append(j[1])
 
-        self.set_joint_positions_and_velocities(positions, velocities)
-        self.pause()
-
-    @staticmethod
-    def pause():
-        for _ in range(10000):
-            p.stepSimulation()
-
-
-def record_demo():
+def record_demo_with_keyboard():
     while True:
-        sim.control_arm()
+        sim.control_arm_with_keyboard()
         p.stepSimulation()
         time.sleep(1.0 / 240.0)
 
@@ -521,19 +545,15 @@ if __name__ == "__main__":
     config = Config()
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
-    config.VERBOSITY = 0
     db = create_and_populate_db(config)
     config.VERBOSITY = 1
-    target_object = "tomato_soup_can"
-    sim = DemoSimEnv(
-        config,
-        db.get_urdf_path(target_object),
-        db.get_urdf_scale(target_object),
-        (0, 0, 0),
-        (0, 0, 0),
-    )
 
-    record_demo()
+    obj_name = "YcbBanana"
+    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
 
-    # data = sim.load_demonstration("demonstrations/demonstration_mini_cheetah.json")
-    # sim.replay_demo(data["demo_velocities"])
+    sim = DemoSimEnv(config, Task.PUSHING.value, object_path, rot=(0, 0, np.pi/2))
+
+    record_demo_with_keyboard()
+
+    # data = sim.load_demonstration(db.get_demo_for_object("banana"))
+    # sim.replay_demo(data["demo_positions"])
