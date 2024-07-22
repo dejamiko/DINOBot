@@ -10,7 +10,7 @@ from DINOserver.dino_vit_features.extractor import ViTExtractor
 
 from config import Config
 from connector import get_correspondences
-from database import create_and_populate_db
+from database import DB
 from demo_sim_env import DemoSimEnv
 from task_types import Task
 
@@ -330,6 +330,6 @@ if __name__ == "__main__":
     config.DRAW_CORRESPONDENCES = True
     config.SEED = 0
     config.BASE_URL = "http://localhost:8080/"
-    db = create_and_populate_db(config)
+    db = DB(config)
     success, tries = run_dino_once(config, db, "banana", "banana", Task.PUSHING.value)
     print(success, tries)

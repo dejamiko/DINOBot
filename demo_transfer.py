@@ -2,7 +2,7 @@ import os
 import time
 
 from config import Config
-from database import create_and_populate_db
+from database import DB
 from demo_sim_env import DemoSimEnv
 from dinobot import run_dino_once
 from task_types import Task
@@ -28,7 +28,7 @@ def run_self_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
-    db = create_and_populate_db(config)
+    db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
 
@@ -59,7 +59,7 @@ def run_cross_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
-    db = create_and_populate_db(config)
+    db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
 
@@ -99,13 +99,14 @@ def replay_transfer(config, db, base_object, target_object, num, task):
 def ingest_transfers():
     config = Config()
     config.USE_GUI = False
-    db = create_and_populate_db(config)
+    db = DB(config)
     config.VERBOSITY = 0
     results = {}
     base_dir = "_generated/transfers/grasping/"
     names = db.get_all_object_names_for_task("grasping")
-    files = os.listdir(base_dir)
+    files = sorted(os.listdir(base_dir))
     start_time = time.time()
+    prev = None
     for i, state in enumerate(files):
         if not state.endswith(".json"):
             continue
@@ -127,16 +128,13 @@ def ingest_transfers():
         if (base, target) not in results:
             results[(base, target)] = 0
         results[(base, target)] += success
+        if prev is not None and (base, target) != prev:
+            f"For transfer {base}->{target}: {results[(base, target)]}/10 success rate with -1 steps on average"
+        prev = (base, target)
         if i % 10 == 0:
             print(
                 f"Completed {i + 1}/{len(files)}, taking {time.time() - start_time} seconds"
             )
-
-    sorted_keys = sorted(results.keys())
-    for s in sorted_keys:
-        print(
-            f"For transfer {s[0]}->{s[1]}: {results[s]}/10 success rate with -1 steps on average"
-        )
 
 
 if __name__ == "__main__":
