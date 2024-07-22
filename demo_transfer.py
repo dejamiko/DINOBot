@@ -27,8 +27,7 @@ def run_self_experiment(task):
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
-    config.RUN_LOCALLY = False
-    config.BASE_URL = "http://localhost:8080/"
+    config.RUN_LOCALLY = True
     db = create_and_populate_db(config)
 
     names = db.get_all_object_names_for_task(task)
