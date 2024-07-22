@@ -6,6 +6,43 @@ from DINOserver.server import correspondences_backend, correspondences_fast_back
 from config import Config
 
 
+def get_correspondences(config, counter, rgb_bn_path, rgb_live_path, **kwargs):
+    results = {}
+    arguments = {
+        "image_path1": rgb_bn_path,
+        "image_path2": rgb_live_path,
+        "url": config.BASE_URL,
+        "dino_config": config.get_dino_config(),
+    }
+    if config.USE_FAST_CORRESPONDENCES:
+        arguments["num_patches"] = kwargs.get("num_patches", None)
+        arguments["descriptor_vectors"] = kwargs.get("descriptor_vectors", None)
+        arguments["points1"] = kwargs.get("points1_2d", None)
+        if counter % config.RECOMPUTE_EVERY == 0:
+            arguments["num_patches"] = None
+            arguments["descriptor_vectors"] = None
+            arguments["points1"] = None
+        if config.RUN_LOCALLY:
+            arguments["extractor"] = kwargs.get("extractor", None)
+
+    if config.USE_FAST_CORRESPONDENCES:
+        res = _find_correspondences_fast(**arguments)
+        results["num_patches"] = res[3]
+        results["descriptor_vectors"] = res[4]
+    else:
+        res = _find_correspondences(**arguments)
+        results["time_taken"] = res[2]
+    results["points1_2d"] = res[0]
+    results["points2_2d"] = res[1]
+    results["time_taken"] = res[2]
+
+    if config.DRAW_CORRESPONDENCES:
+        results["image1_correspondences"] = res[-2]
+        results["image2_correspondences"] = res[-1]
+
+    return results
+
+
 def _find_correspondences(image_path1, image_path2, url, dino_config):
     if dino_config["run_locally"]:
         return _find_correspondences_locally(image_path1, image_path2, dino_config)
@@ -99,50 +136,14 @@ def _find_correspondences_fast_locally(
     )
 
 
-def get_correspondences(config, counter, rgb_bn_path, rgb_live_path, **kwargs):
-    results = {}
-    arguments = {
-        "image_path1": rgb_bn_path,
-        "image_path2": rgb_live_path,
-        "url": config.BASE_URL,
-        "dino_config": config.get_dino_config(),
-    }
-    if config.USE_FAST_CORRESPONDENCES:
-        arguments["num_patches"] = kwargs.get("num_patches", None)
-        arguments["descriptor_vectors"] = kwargs.get("descriptor_vectors", None)
-        arguments["points1"] = kwargs.get("points1_2d", None)
-        if counter % config.RECOMPUTE_EVERY == 0:
-            arguments["num_patches"] = None
-            arguments["descriptor_vectors"] = None
-            arguments["points1"] = None
-        if config.RUN_LOCALLY:
-            arguments["extractor"] = kwargs.get("extractor", None)
-
-    if config.USE_FAST_CORRESPONDENCES:
-        res = _find_correspondences_fast(**arguments)
-        results["num_patches"] = res[3]
-        results["descriptor_vectors"] = res[4]
-    else:
-        res = _find_correspondences(**arguments)
-        results["time_taken"] = res[2]
-    results["points1_2d"] = res[0]
-    results["points2_2d"] = res[1]
-    results["time_taken"] = res[2]
-
-    if config.DRAW_CORRESPONDENCES:
-        results["image1_correspondences"] = res[-2]
-        results["image2_correspondences"] = res[-1]
-
-    return results
-
-
 if __name__ == "__main__":
     # Note, this assumes a server is running
     config = Config()
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = False
-    image1 = "images/rgb_image_bn_0.png"
-    image2 = "images/rgb_image_live_0.png"
+    config.BASE_URL = "http://localhost:8080/"
+    image1 = "tests/_test_assets/image1.png"
+    image2 = "tests/_test_assets/image2.png"
 
     results = get_correspondences(config, 0, image1, image2)
     assert "points1_2d" in results
@@ -152,13 +153,13 @@ if __name__ == "__main__":
     print("Time taken", results["time_taken"])
 
     config.DRAW_CORRESPONDENCES = True
-    print("we're before")
     results = get_correspondences(config, 0, image1, image2)
-    print("we're after")
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
-    assert len(results) == 3
+    assert "image1_correspondences" in results
+    assert "image2_correspondences" in results
+    assert len(results) == 5
     print("Time taken", results["time_taken"])
 
     config.USE_FAST_CORRESPONDENCES = True
@@ -174,15 +175,15 @@ if __name__ == "__main__":
     print("Time taken", results["time_taken"])
 
     config.DRAW_CORRESPONDENCES = True
-    print("we're before")
     results = get_correspondences(config, 0, image1, image2)
-    print("we're after")
     assert "points1_2d" in results
     assert "points2_2d" in results
     assert "time_taken" in results
     assert "num_patches" in results
     assert "descriptor_vectors" in results
-    assert len(results) == 5
+    assert "image1_correspondences" in results
+    assert "image2_correspondences" in results
+    assert len(results) == 7
     print("Time taken", results["time_taken"])
 
     config.DRAW_CORRESPONDENCES = False

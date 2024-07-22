@@ -4,26 +4,7 @@ from config import Config
 from database import create_and_populate_db
 from demo_sim_env import DemoSimEnv
 from dinobot import run_dino_once
-
-
-def run_self_experiment(names):
-    config = Config()
-    config.VERBOSITY = 0
-    config.USE_FAST_CORRESPONDENCES = True
-    config.USE_GUI = False
-    config.RUN_LOCALLY = False
-    db = create_and_populate_db(config)
-
-    num_tries = 10
-    for n in names:
-        success_count = 0
-        for s in range(num_tries):
-            config.SEED = s
-            success, tries = run_dino_once(config, db, n, n)
-            print(n, s, success, tries)
-            if success:
-                success_count += 1
-        print(f"For object {n}: {success_count}/{num_tries} success rate")
+from task_types import Task
 
 
 def find_first(base, target, config, num_tries):
@@ -40,7 +21,7 @@ def find_first(base, target, config, num_tries):
     return i
 
 
-def run_cross_experiment():
+def run_self_experiment(task):
     config = Config()
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
@@ -48,7 +29,40 @@ def run_cross_experiment():
     config.RUN_LOCALLY = False
     db = create_and_populate_db(config)
 
-    names = db.get_all_object_names()
+    names = db.get_all_object_names_for_task(task)
+
+    print(f"Running self transfer experiment for task {task}")
+
+    num_tries = 10
+    for name in names:
+        all_tries = []
+        success_count = 0
+        for s in range(find_first(name, name, config, num_tries), num_tries):
+            config.SEED = s
+            success, tries = run_dino_once(config, db, name, name, task)
+            if success:
+                success_count += 1
+            all_tries.append(tries)
+        if len(all_tries) == 0:
+            print(f"Skipped {name}->{name}")
+            continue
+        print(
+            f"For transfer {name}->{name}: {success_count}/{num_tries} success rate with "
+            f"{sum(all_tries) / len(all_tries)} steps on average"
+        )
+
+
+def run_cross_experiment(task):
+    config = Config()
+    config.VERBOSITY = 0
+    config.USE_FAST_CORRESPONDENCES = True
+    config.USE_GUI = False
+    config.RUN_LOCALLY = False
+    db = create_and_populate_db(config)
+
+    names = db.get_all_object_names_for_task(task)
+
+    print(f"Running cross transfer experiment for task {task}")
 
     num_tries = 10
     for base in names:
@@ -57,9 +71,7 @@ def run_cross_experiment():
             success_count = 0
             for s in range(find_first(base, target, config, num_tries), num_tries):
                 config.SEED = s
-                success, tries = run_dino_once(
-                    config, db, base_object=base, target_object=target
-                )
+                success, tries = run_dino_once(config, db, base, target, task)
                 if success:
                     success_count += 1
                 all_tries.append(tries)
@@ -72,23 +84,19 @@ def run_cross_experiment():
             )
 
 
-def replay_transfer(base_object, target_object, num):
+def replay_transfer(base_object, target_object, num, task):
     config = Config()
     db = create_and_populate_db(config)
     config.VERBOSITY = 1
-    sim = DemoSimEnv(
-        config, db.get_urdf_path(target_object), db.get_urdf_scale(target_object)
-    )
+    sim = DemoSimEnv(config, task, *db.get_load_info(target_object, task))
     sim.load_state(
         f"_generated/transfers/transfer_{base_object}_{target_object}_{str(num).zfill(3)}.json"
     )
-    demo = sim.load_demonstration(db.get_demo_for_object(base_object))[
-        "demo_velocities"
-    ]
+    demo = sim.load_demonstration(db.get_demo_for_object(base_object))["demo_positions"]
     success = sim.replay_demo(demo)
     sim.disconnect()
     print(success)
 
 
 if __name__ == "__main__":
-    run_cross_experiment()
+    run_cross_experiment(Task.GRASPING.value)

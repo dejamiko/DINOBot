@@ -7,6 +7,7 @@ import pybullet_data
 from scipy.spatial.transform import Rotation
 
 from config import Config
+from task_types import Task
 
 
 def to_euler(angles):
@@ -91,46 +92,23 @@ class SimEnv:
         self.move_to_target_joint_position(home_position)
 
     def load_object(
-        self, object_path="jenga/jenga.urdf", scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)
+        self, task_type, object_path, scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)
     ):
         """
-        Load an object on the table and move the arm so the camera can see it.
-        :param object_path: the path to the object URDF file
+        Load an object in the appropriate place depending on the task
+        :param task_type: The type of the task for which to load the object
+        :param object_path: The path to the object URDF file
         :param scale: The scale to be used for the object model
+        :param offset: The offset to the initial object position
+        :param rot: The rotation applied to the initial object rotation
         """
-        # load some object on the table somewhere random (within a certain range)
-        x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
-        pos_x = (
-            np.random.uniform(-0.05, 0.05) + x_base
-            if self.config.RANDOM_OBJECT_POSITION
-            else x_base
-        )
-        pos_y = (
-            np.random.uniform(-0.05, 0.05) + y_base
-            if self.config.RANDOM_OBJECT_POSITION
-            else y_base
-        )
-        angle = (
-            np.random.uniform(0, np.pi / 2) if self.config.RANDOM_OBJECT_ROTATION else 0
-        )
-        self.objects[f"object"] = p.loadURDF(
-            object_path,
-            offset + np.array((pos_x, pos_y, z_base)),
-            p.getQuaternionFromEuler(rot + np.array((0, 0, angle))),
-            globalScaling=scale,
-        )
-
-        # let the object drop
-        for i in range(100):
-            p.stepSimulation()
-
-        # move the arm so the camera can see the object
-        eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
-        if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
-            pos = [pos_x, pos_y, eef_pos[2]]
+        # load the object on the table somewhere random (within a certain range)
+        if task_type == Task.GRASPING.value or task_type == Task.PUSHING.value:
+            self._load_object_on_the_table(object_path, offset, rot, scale)
+        elif task_type == Task.HAMMERING.value:
+            self._load_object_in_the_gripper(object_path, offset, rot, scale)
         else:
-            pos = [x_base, y_base, eef_pos[2]]
-        self._move_to_target_position_and_rotation(pos)
+            raise ValueError(f"Unknown task type {task_type}")
 
     def get_rgbd_image(self):
         """
@@ -264,51 +242,17 @@ class SimEnv:
         """
         p.disconnect()
 
-    def _move_to_target_position_and_rotation(
-        self, target_position, target_rotation=None
-    ):
-        """
-        Move the arm to the target position.
-        :param target_position: the position of the target in the world frame
-        :param target_rotation: the rotation of the target in the world frame
-        """
-        if target_rotation is None:
-            target_rotation = p.getLinkState(self.objects["arm"], 11)[1]
-        target_joint_positions = p.calculateInverseKinematics(
-            self.objects["arm"],
-            11,
-            target_position,
-            target_rotation,
-            lowerLimits=self.lower_limits,
-            upperLimits=self.upper_limits,
-            jointRanges=self.joint_ranges,
-            restPoses=self.rest_poses,
-        )
-
-        # TODO check the value ranges (making the joint angles larger could help)
-
-        if len(target_joint_positions) != p.getNumJoints(self.objects["arm"]):
-            target_joint_positions += tuple(
-                [0]
-                * (p.getNumJoints(self.objects["arm"]) - len(target_joint_positions))
-            )
-            # TODO THIS DOESN'T NEED TO BE AT THE END (getJointInfo can help with this)
-
-        self.move_to_target_joint_position(target_joint_positions)
-
     def move_to_target_joint_position(self, target_joint_positions):
         """
         Move the arm to the target joint positions.
         :param target_joint_positions: the target joint positions
         """
-        # TODO Add linear interpolation in both space and joint angles
         p.setJointMotorControlArray(
             self.objects["arm"],
             list(range(p.getNumJoints(self.objects["arm"]))),
             p.POSITION_CONTROL,
             targetPositions=target_joint_positions,
         )
-        target_joint_positions = np.array(target_joint_positions)
         error = np.inf
         step = 0
         while (
@@ -335,6 +279,89 @@ class SimEnv:
             if "points_debug_3d" in self.objects:
                 p.removeUserDebugItem(self.objects["points_debug_3d"])
                 self.objects.pop("points_debug_3d")
+
+    def get_current_joint_positions(self):
+        return [
+            x[0]
+            for x in p.getJointStates(
+                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
+            )
+        ]
+
+    def _move_to_target_position_and_rotation(
+        self, target_position, target_rotation=None
+    ):
+        """
+        Move the arm to the target position.
+        :param target_position: the position of the target in the world frame
+        :param target_rotation: the rotation of the target in the world frame
+        """
+        if target_rotation is None:
+            target_rotation = p.getLinkState(self.objects["arm"], 11)[1]
+        target_joint_positions = p.calculateInverseKinematics(
+            self.objects["arm"],
+            11,
+            target_position,
+            target_rotation,
+            lowerLimits=self.lower_limits,
+            upperLimits=self.upper_limits,
+            jointRanges=self.joint_ranges,
+            restPoses=self.rest_poses,
+        )
+
+        if len(target_joint_positions) != p.getNumJoints(self.objects["arm"]):
+            i, j = 0, 0
+            target_joint_positions_full = [0] * p.getNumJoints(self.objects["arm"])
+            while i < len(target_joint_positions):
+                if self.lower_limits[i] < self.upper_limits[i]:
+                    target_joint_positions_full[i] = target_joint_positions[j]
+                    j += 1
+                i += 1
+            target_joint_positions = tuple(target_joint_positions_full)
+
+        self.move_to_target_joint_position(target_joint_positions)
+
+    def _load_object_on_the_table(self, object_path, offset, rot, scale):
+        """
+        Load the object on the table and move the arm so the camera can see it.
+        :param object_path: The path to the object URDF file
+        :param scale: The scale to be used for the object model
+        :param offset: The offset to the initial object position
+        :param rot: The rotation applied to the initial object rotation
+        """
+        x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
+        pos_x = (
+            np.random.uniform(-0.05, 0.05) + x_base
+            if self.config.RANDOM_OBJECT_POSITION
+            else x_base
+        )
+        pos_y = (
+            np.random.uniform(-0.05, 0.05) + y_base
+            if self.config.RANDOM_OBJECT_POSITION
+            else y_base
+        )
+        angle = (
+            np.random.uniform(0, np.pi / 2) if self.config.RANDOM_OBJECT_ROTATION else 0
+        )
+        self.objects[f"object"] = p.loadURDF(
+            object_path,
+            offset + np.array((pos_x, pos_y, z_base)),
+            p.getQuaternionFromEuler(rot + np.array((0, 0, angle))),
+            globalScaling=scale,
+        )
+        # let the object drop
+        for i in range(100):
+            p.stepSimulation()
+        # move the arm so the camera can see the object
+        eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
+        if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
+            pos = [pos_x, pos_y, eef_pos[2]]
+        else:
+            pos = [x_base, y_base, eef_pos[2]]
+        self._move_to_target_position_and_rotation(pos)
+
+    def _load_object_in_the_gripper(self, object_path, offset, rot, scale):
+        raise NotImplemented
 
     def _move_with_debug_dot(self, desired_pos, desired_rot):
         """
@@ -499,14 +526,6 @@ class SimEnv:
             p.removeUserDebugItem(self.objects["points_debug_3d"])
             self.objects.pop("points_debug_3d")
         self.objects["points_debug_3d"] = p.addUserDebugPoints(world_points, colours, 5)
-
-    def get_current_joint_positions(self):
-        return [
-            x[0]
-            for x in p.getJointStates(
-                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
-            )
-        ]
 
 
 if __name__ == "__main__":

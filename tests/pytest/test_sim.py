@@ -4,6 +4,7 @@ import pytest
 
 from config import Config
 from sim_env import SimEnv
+from task_types import Task
 
 
 def test_sim_can_be_created():
@@ -47,7 +48,7 @@ def test_load_object_loads_object(sim_fixture):
     sim, config = sim_fixture
     config.RANDOM_OBJECT_POSITION = False
     config.RANDOM_OBJECT_ROTATION = False
-    sim.load_object()
+    sim.load_object(Task.GRASPING.value, "objects/mug.urdf")
     assert "object" in sim.objects
     pos, rot = p.getBasePositionAndOrientation(sim.objects["object"])
     x, y, z = config.OBJECT_X_Y_Z_BASE
@@ -61,7 +62,7 @@ def test_load_object_with_random_position(sim_fixture):
     sim, config = sim_fixture
     config.RANDOM_OBJECT_POSITION = True
     config.RANDOM_OBJECT_ROTATION = False
-    sim.load_object()
+    sim.load_object(Task.GRASPING.value, "objects/mug.urdf")
     assert "object" in sim.objects
     pos, rot = p.getBasePositionAndOrientation(sim.objects["object"])
     x, y, z = config.OBJECT_X_Y_Z_BASE
@@ -74,7 +75,7 @@ def test_load_object_with_random_position(sim_fixture):
 def test_load_object_with_random_rotation(sim_fixture):
     sim, config = sim_fixture
     config.RANDOM_OBJECT_ROTATION = True
-    sim.load_object()
+    sim.load_object(Task.GRASPING.value, "objects/mug.urdf")
     assert "object" in sim.objects
     pos, rot = p.getBasePositionAndOrientation(sim.objects["object"])
     x, y, z = config.OBJECT_X_Y_Z_BASE

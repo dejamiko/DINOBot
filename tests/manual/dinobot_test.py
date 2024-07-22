@@ -1,6 +1,7 @@
 from config import Config
 from database import DB
 from dinobot import run_dino_once
+from task_types import Task
 
 if __name__ == "__main__":
     # note, for paths to work, this needs to be run with the working directory being the parent DINOBot directory
@@ -14,6 +15,6 @@ if __name__ == "__main__":
 
     db = DB(config)
 
-    name = db.get_all_object_names()[0]
-    success = run_dino_once(config, db, name, name)
+    name = db.get_all_object_names_for_task(Task.GRASPING.value)[0]
+    success = run_dino_once(config, db, name, name, Task.GRASPING.value)
     print(f"For object {name} achieved success: {success}")

@@ -4,7 +4,6 @@ import time
 
 import cv2
 import numpy as np
-import requests
 import torch
 import torchvision.transforms.functional as f
 from DINOserver.dino_vit_features.extractor import ViTExtractor
@@ -13,6 +12,7 @@ from config import Config
 from connector import get_correspondences
 from database import create_and_populate_db
 from demo_sim_env import DemoSimEnv
+from task_types import Task
 
 
 def find_transformation(x, y, config):
@@ -100,8 +100,6 @@ def find_transformation_lower_DOF(x, y, config):
         np.linalg.det(R), 1
     ), f"Expected the rotation matrix to describe a rigid transform, got det={np.linalg.det(R)}"
 
-    # TODO infinite joint angles and Matis's transformation code
-
     return R, t
 
 
@@ -156,6 +154,11 @@ def clear_images(image_directory):
 
 
 def set_up_images_directory(config):
+    """
+    Create a temporary images directory
+    :param config: The config used
+    :return: The temporary images directory
+    """
     base_directory = config.IMAGE_DIR
     if not os.path.exists(base_directory):
         os.makedirs(base_directory)
@@ -174,11 +177,13 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
     :param data: The data containing the bottleneck images and the demonstration velocities (after semantic retrieval)
     :param config: The configuration object
     :param image_directory: The base image directory
+    :param base_object: The object on which the original demonstration was recorded
+    :param target_object: The target object to be solved
     """
-    rgb_bn, depth_bn, demo_velocities = (
-        data["rgb_bn"][0],
-        data["depth_bn"][0],
-        data["demo_velocities"],
+    rgb_bn, depth_bn, demo_positions = (
+        data["images"][0],
+        data["depth_buffers"][0],
+        data["demo_positions"],
     )
 
     if config.RUN_LOCALLY and config.USE_FAST_CORRESPONDENCES:
@@ -186,12 +191,7 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
     else:
         extractor = None
 
-    # additionally save the images
-    for im, dp in zip(data["rgb_bn"], data["depth_bn"]):
-        _, im = transform_images(config, dp, im)
-        save_rgb_image(im, "bn_add", image_directory)
-
-    depth_bn, rgb_bn = transform_images(config, depth_bn, rgb_bn)
+    rgb_bn, depth_bn = transform_images(config, depth_bn, rgb_bn)
 
     rgb_bn_path = save_rgb_image(rgb_bn, "bn", image_directory)
     error = np.inf
@@ -271,72 +271,41 @@ def deploy_dinobot(env, data, config, image_directory, base_object, target_objec
     # before replay, store the current state, so it can be reloaded and replayed
     env.store_state(base_object, target_object)
     # Once error is small enough, replay demo.
-    return env.replay_demo(demo_velocities), counter
+    return env.replay_demo(demo_positions), counter
 
 
 def transform_images(config, depth_bn, rgb_bn):
-    # transform the images to match the necessary shapes
+    """
+    Transform images to have the same shapes
+    :param config: The config used
+    :param depth_bn: The depth buffer in the bottleneck pose
+    :param rgb_bn: The image in the bottleneck pose
+    :return: The depth buffer and image in the bottleneck pose after resizing
+    """
     rgb_bn = torch.tensor(rgb_bn).swapaxes(0, 1).swapaxes(0, 2)
     depth_bn = torch.tensor(depth_bn).unsqueeze(0)
     rgb_bn = f.resize(rgb_bn, config.LOAD_SIZE)
     depth_bn = f.resize(depth_bn, config.LOAD_SIZE)
     rgb_bn = rgb_bn.swapaxes(0, 2).swapaxes(0, 1).numpy()
     depth_bn = depth_bn.squeeze(0).numpy()
-    return depth_bn, rgb_bn
+    return rgb_bn, depth_bn
 
 
-def get_embeddings(image_path, url):
+def run_dino_once(config, db, base_object, target_object, task):
     """
-    Get the embeddings of an image from the DINO server using the embeddings endpoint
-    :param image_path: The path to the image
-    :param url: The url of the DINO server
-    :return: The embeddings of the image
+    Run dinobot once for a given target and base object pair
+    :param config: The configuration used
+    :param db: The database
+    :param target_object: The target object on which the demo is to be performed
+    :param base_object: The object on which the demo was recorded
+    :param task: The task to be performed
+    :return: The success of the dinobot deployment
     """
-    url += "embeddings"
-    with open(image_path, "rb") as f:
-        files = {"image": f.read()}
-    response = requests.post(url, files=files)
-    if response.status_code == 200:
-        parsed_response = response.json()
-        return parsed_response["embeddings"]
-    else:
-        print(response.json())
-
-
-def calculate_object_similarities(config):
-    """
-    Calculate the similarities between all images in a directory using the embeddings from the DINO server and the
-    cosine similarity metric.
-    :param config: The configuration object
-    :return: A dictionary containing the similarities between all pairs of images
-    """
-    image_embeddings = {}
-    for filename in os.listdir(config.IMAGE_DIR):
-        file_path = os.path.join(config.IMAGE_DIR, filename)
-        img_emb = get_embeddings(file_path, config.BASE_URL)
-        image_embeddings[filename.split(".")[0]] = img_emb
-
-    cos_sim = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
-
-    similarities = {}
-    for a in image_embeddings:
-        for b in image_embeddings:
-            if a != b and (a, b) not in similarities and (b, a) not in similarities:
-                similarities[(a, b)] = cos_sim(image_embeddings[a], image_embeddings[b])
-
-    return similarities
-
-
-def run_dino_once(config, db, target_object, base_object):
     try:
         image_directory = set_up_images_directory(config)
 
-        env = DemoSimEnv(
-            config,
-            db.get_urdf_path(target_object),
-            *db.get_urdf_object_info(target_object),
-        )
-        data = env.load_demonstration(db.get_demo_for_object(base_object))
+        env = DemoSimEnv(config, task, *db.get_load_info(target_object, task))
+        data = env.load_demonstration(db.get_demo(base_object, task))
 
         success, tries = deploy_dinobot(
             env, data, config, image_directory, base_object, target_object
@@ -360,6 +329,7 @@ if __name__ == "__main__":
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
     config.SEED = 0
+    config.BASE_URL = "http://localhost:8080/"
     db = create_and_populate_db(config)
-    success = run_dino_once(config, db, "banana", "132")
-    print(success)
+    success, tries = run_dino_once(config, db, "banana", "132", Task.GRASPING.value)
+    print(success, tries)
