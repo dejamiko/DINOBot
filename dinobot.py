@@ -331,5 +331,5 @@ if __name__ == "__main__":
     config.SEED = 0
     config.BASE_URL = "http://localhost:8080/"
     db = create_and_populate_db(config)
-    success, tries = run_dino_once(config, db, "banana", "132", Task.GRASPING.value)
+    success, tries = run_dino_once(config, db, "banana", "banana", Task.PUSHING.value)
     print(success, tries)

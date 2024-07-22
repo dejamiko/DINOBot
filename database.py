@@ -322,6 +322,18 @@ def pascal_to_snake_case(name):
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+def populate_transfers(db):
+    reg = re.compile(
+        r"For transfer ([a-z0-9_]*)->([a-z0-9_]*): (\d*)/10 success rate with -?\d*.?\d* steps on average"
+    )
+    with open("_generated/grasping_cross_experiment") as f:
+        lines = f.readlines()
+        for l in lines:
+            m = reg.match(l)
+            base, target, num = m.groups()
+            db.add_transfer(base, target, Task.GRASPING.value, int(num) / 10.0)
+
+
 def create_and_populate_db(config):
     db = DB(config)
     db.remove_all_tables()
@@ -350,6 +362,7 @@ def create_and_populate_db(config):
                 positions[task].get(object_name, None),
                 rotations[task].get(object_name, None),
             )
+    # populate_transfers(db)
     return db
 
 

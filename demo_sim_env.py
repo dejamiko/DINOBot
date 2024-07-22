@@ -8,7 +8,6 @@ from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
-from database import create_and_populate_db
 from sim_env import SimEnv
 from task_types import Task
 
@@ -17,7 +16,7 @@ class DemoSimEnv(SimEnv):
     def __init__(
         self,
         config,
-        task_type: Task,
+        task_type,
         object_path,
         scale=1.0,
         offset=(0, 0, 0),
@@ -111,7 +110,7 @@ class DemoSimEnv(SimEnv):
         self.objects.pop("replaying_text")
         return success
 
-    def reset(self, task_type: Task = None):
+    def reset(self, task_type=None):
         """
         Reset the simulation.
         :param task_type: Optionally provided type of task to perform.
@@ -161,6 +160,45 @@ class DemoSimEnv(SimEnv):
 
         self._set_joint_positions_and_velocities(positions, velocities)
         self.pause()
+
+        self.task = data["task"]
+        self.object_initial_pos_and_rot = (
+            np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
+            np.array(p.getBasePositionAndOrientation(self.objects["object"])[1]),
+        )
+
+    def store_state(self, base_object=None, target_object=None):
+        # store a JSON file in BASE_DIR/transfers which allows for loading the env and quick replay
+        data = {
+            "object": p.getBasePositionAndOrientation(self.objects["object"]),
+            "arm": p.getBasePositionAndOrientation(self.objects["arm"]),
+            "joints": p.getJointStates(
+                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
+            ),
+            "seed": self.config.SEED,
+            "task": self.task,
+        }
+        i = 0
+        while True:
+            if base_object is not None:
+                filename = os.path.join(
+                    self.config.BASE_DIR,
+                    "transfers",
+                    self.task,
+                    f"transfer_{base_object}_{target_object}_{str(i).zfill(3)}.json",
+                )
+            else:
+                filename = os.path.join(
+                    self.config.BASE_DIR,
+                    "transfers",
+                    self.task,
+                    f"transfer_{str(i).zfill(3)}.json",
+                )
+            if not os.path.exists(filename):
+                break
+            i += 1
+        with open(filename, "w") as f:
+            json.dump(data, f)
 
     @staticmethod
     def pause():
@@ -347,7 +385,7 @@ class DemoSimEnv(SimEnv):
         p.removeUserDebugItem(self.objects["recording_text"])
         self.objects.pop("recording_text")
         # find an unused filename
-        directory = "demonstrations/"
+        directory = f"demonstrations/{self.task}/"
         i = 0
         while True:
             filename = f"{directory}demonstration_{str(i).zfill(3)}.json"
@@ -387,7 +425,7 @@ class DemoSimEnv(SimEnv):
             return
 
         # find the last recorded demo by inspecting the creation times
-        directory = "demonstrations/"
+        directory = f"demonstrations/{self.task}/"
         latest_time = 0
         latest_path = None
         for f in os.listdir(directory):
@@ -415,13 +453,38 @@ class DemoSimEnv(SimEnv):
         """
         # check if the object is higher than the table
         pos, _ = p.getBasePositionAndOrientation(self.objects["object"])
-        if pos[2] < self.config.OBJECT_X_Y_Z_BASE[2] + 0.2:
+        if pos[2] < self.config.OBJECT_X_Y_Z_BASE[2] + self.config.GRASP_SUCCESS_HEIGHT:
             return False
         return True
+
+    def _determine_push_success(self):
+        """
+        See if the object is moved in a specific direction by some distance
+        :return: True if the push was successful, false otherwise
+        """
+        pos, rot = p.getBasePositionAndOrientation(self.objects["object"])
+        init_pos, init_rot = self.object_initial_pos_and_rot
+
+        dist = np.linalg.norm(pos - init_pos)
+        pos_mapped = pos - init_pos
+        pos_rotated = np.dot(
+            pos_mapped, np.array(p.getMatrixFromQuaternion(init_rot)).reshape(3, -1).T
+        )
+        print("pos_rot", pos_rotated)
+        angle = np.arctan2(pos_rotated[0], pos_rotated[1])
+        print("angle", angle)
+        print("dist", dist)
+
+        return dist > self.config.PUSH_SUCCESS_DIST and (
+            abs(angle) < self.config.PUSH_SUCCESS_ANGLE
+            or abs(angle) - np.pi < self.config.PUSH_SUCCESS_ANGLE
+        )  # TODO Make sure this works
 
     def _evaluate_success(self):
         if self.task == Task.GRASPING.value:
             return self._determine_grasp_success()
+        elif self.task == Task.PUSHING.value:
+            return self._determine_push_success()
         else:
             raise NotImplemented()
 
@@ -491,36 +554,6 @@ class DemoSimEnv(SimEnv):
         self.recently_triggered = 10
         self.store_state()
 
-    def store_state(self, base_object=None, target_object=None):
-        # store a JSON file in BASE_DIR/transfers which allows for loading the env and quick replay
-        data = {
-            "object": p.getBasePositionAndOrientation(self.objects["object"]),
-            "arm": p.getBasePositionAndOrientation(self.objects["arm"]),
-            "joints": p.getJointStates(
-                self.objects["arm"], range(p.getNumJoints(self.objects["arm"]))
-            ),
-            "seed": self.config.SEED,
-        }
-        i = 0
-        while True:
-            if base_object is not None:
-                filename = os.path.join(
-                    self.config.BASE_DIR,
-                    "transfers",
-                    f"transfer_{base_object}_{target_object}_{str(i).zfill(3)}.json",
-                )
-            else:
-                filename = os.path.join(
-                    self.config.BASE_DIR,
-                    "transfers",
-                    f"transfer_{str(i).zfill(3)}.json",
-                )
-            if not os.path.exists(filename):
-                break
-            i += 1
-        with open(filename, "w") as f:
-            json.dump(data, f)
-
     def _load_last_state(self):
         directory = os.path.join(self.config.BASE_DIR, "transfers/")
         latest_time = 0
@@ -545,13 +578,18 @@ if __name__ == "__main__":
     config = Config()
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
-    db = create_and_populate_db(config)
+    # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    obj_name = "YcbBanana"
+    obj_name = "YcbPowerDrill"
     object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
 
-    sim = DemoSimEnv(config, Task.PUSHING.value, object_path, rot=(0, 0, np.pi/2))
+    sim = DemoSimEnv(
+        config, Task.PUSHING.value, object_path, offset=(0.1, 0, 0), rot=(0, 0, 1)
+    )
+
+    # TODO store the rotation in the db (so that the pushing along the short axis is a success) and not store the helper
+    # rotation which simplifies the demonstration
 
     record_demo_with_keyboard()
 

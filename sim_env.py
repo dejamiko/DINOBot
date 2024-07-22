@@ -352,6 +352,10 @@ class SimEnv:
         # let the object drop
         for i in range(100):
             p.stepSimulation()
+        self.object_initial_pos_and_rot = (
+            np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
+            np.array(p.getBasePositionAndOrientation(self.objects["object"])[1]),
+        )
         # move the arm so the camera can see the object
         eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
         if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:

@@ -1,4 +1,5 @@
 import os
+import time
 
 from config import Config
 from database import create_and_populate_db
@@ -27,13 +28,14 @@ def run_self_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = False
+    config.BASE_URL = "http://localhost:8080/"
     db = create_and_populate_db(config)
 
     names = db.get_all_object_names_for_task(task)
 
     print(f"Running self transfer experiment for task {task}")
 
-    num_tries = 10
+    num_tries = 1
     for name in names:
         all_tries = []
         success_count = 0
@@ -57,7 +59,7 @@ def run_cross_experiment(task):
     config.VERBOSITY = 0
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
-    config.RUN_LOCALLY = False
+    config.RUN_LOCALLY = True
     db = create_and_populate_db(config)
 
     names = db.get_all_object_names_for_task(task)
@@ -84,19 +86,61 @@ def run_cross_experiment(task):
             )
 
 
-def replay_transfer(base_object, target_object, num, task):
-    config = Config()
-    db = create_and_populate_db(config)
-    config.VERBOSITY = 1
+def replay_transfer(config, db, base_object, target_object, num, task):
     sim = DemoSimEnv(config, task, *db.get_load_info(target_object, task))
     sim.load_state(
-        f"_generated/transfers/transfer_{base_object}_{target_object}_{str(num).zfill(3)}.json"
+        f"_generated/transfers/{task}/transfer_{base_object}_{target_object}_{str(num).zfill(3)}.json"
     )
-    demo = sim.load_demonstration(db.get_demo_for_object(base_object))["demo_positions"]
+    demo = sim.load_demonstration(db.get_demo(base_object, task))["demo_positions"]
     success = sim.replay_demo(demo)
     sim.disconnect()
-    print(success)
+    return success
+
+
+def ingest_transfers():
+    config = Config()
+    config.USE_GUI = False
+    db = create_and_populate_db(config)
+    config.VERBOSITY = 0
+    results = {}
+    base_dir = "_generated/transfers/grasping/"
+    names = db.get_all_object_names_for_task("grasping")
+    files = os.listdir(base_dir)
+    start_time = time.time()
+    for i, state in enumerate(files):
+        if not state.endswith(".json"):
+            continue
+        state = state[:-5]
+        num = state.split("_")[-1]
+        earliest_occurrence = len(state)
+        latest_occurrence = -1
+        base = ""
+        target = ""
+        for n in names:
+            if state.find(n) != -1 and state.find(n) < earliest_occurrence:
+                earliest_occurrence = state.find(n)
+                base = n
+            if state.find(n) != -1 and state.find(n) > latest_occurrence:
+                latest_occurrence = state.find(n)
+                target = n
+        num = int(num)
+        success = replay_transfer(config, db, base, target, num, Task.GRASPING.value)
+        if (base, target) not in results:
+            results[(base, target)] = 0
+        results[(base, target)] += success
+        if i % 10 == 0:
+            print(
+                f"Completed {i + 1}/{len(files)}, taking {time.time() - start_time} seconds"
+            )
+
+    sorted_keys = sorted(results.keys())
+    for s in sorted_keys:
+        print(
+            f"For transfer {s[0]}->{s[1]}: {results[s]}/10 success rate with -1 steps on average"
+        )
 
 
 if __name__ == "__main__":
-    run_cross_experiment(Task.GRASPING.value)
+    # run_cross_experiment(Task.GRASPING.value)
+    # run_self_experiment(Task.PUSHING.value)
+    ingest_transfers()

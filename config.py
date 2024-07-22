@@ -55,6 +55,10 @@ class Config:
 
     DEMO_ADDITIONAL_IMAGE_ANGLE = 0.174533  # 10 degrees in radians
 
+    GRASP_SUCCESS_HEIGHT = 0.2
+    PUSH_SUCCESS_DIST = 0.2
+    PUSH_SUCCESS_ANGLE = 0.174533  # 10 degrees in radians
+
     def get_dino_config(self):
         return {
             "num_pairs": self.NUM_PAIRS,
