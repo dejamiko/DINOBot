@@ -129,7 +129,9 @@ def ingest_transfers():
             results[(base, target)] = 0
         results[(base, target)] += success
         if prev is not None and (base, target) != prev:
-            print(f"For transfer {base}->{target}: {results[(base, target)]}/10 success rate with -1 steps on average")
+            print(
+                f"For transfer {base}->{target}: {results[(base, target)]}/10 success rate with -1 steps on average"
+            )
         prev = (base, target)
         if i % 10 == 0:
             print(
@@ -141,5 +143,3 @@ if __name__ == "__main__":
     # run_cross_experiment(Task.GRASPING.value)
     run_self_experiment(Task.PUSHING.value)
     # ingest_transfers()
-
-

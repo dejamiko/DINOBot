@@ -328,7 +328,9 @@ rotations = {
     Task.GRASPING.value: {
         "mini_cheetah": (0, np.pi, 0),
     },
-    Task.PUSHING.value: {},
+    Task.PUSHING.value: {
+        "banana": (0, 0, np.pi / 2),
+    },
     Task.HAMMERING.value: {},
 }
 

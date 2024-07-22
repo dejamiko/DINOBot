@@ -13,13 +13,13 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-        self,
-        config,
-        task_type,
-        object_path,
-        scale=1.0,
-        offset=(0, 0, 0),
-        rot=(0, 0, 0),
+            self,
+            config,
+            task_type,
+            object_path,
+            scale=1.0,
+            offset=(0, 0, 0),
+            rot=(0, 0, 0),
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot)
@@ -88,8 +88,8 @@ class DemoSimEnv(SimEnv):
         rot = np.array(p.getMatrixFromQuaternion(rot)).reshape(3, 3)
         for pos_delta, rot_delta, gripper_open in demo:
             # calculate the actual position and rotation from the current one
-            new_pos = pos + pos_delta
             new_rot = rot_delta @ rot
+            new_pos = pos + np.dot(pos_delta, rot.T)
             new_rot = Rotation.from_matrix(new_rot).as_quat(canonical=True)
 
             if self.config.VERBOSITY > 1:
@@ -220,8 +220,8 @@ class DemoSimEnv(SimEnv):
 
             self.recorded_data.append(
                 (
-                    (np.array(pos) - f_pos).tolist(),
-                    (rot @ np.linalg.inv(f_rot)).tolist(),
+                    (np.dot(np.linalg.inv(f_rot), np.array(pos) - f_pos)).tolist(),
+                    (np.dot(np.linalg.inv(f_rot), rot)).tolist(),
                     self.gripper_open,
                 )
             )
@@ -272,7 +272,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-        self, joint_positions, joint_velocities=None
+            self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -464,16 +464,28 @@ class DemoSimEnv(SimEnv):
         pos, rot = p.getBasePositionAndOrientation(self.objects["object"])
         init_pos, init_rot = self.object_initial_pos_and_rot
 
-        dist = np.linalg.norm(pos - init_pos)
-        pos_mapped = pos - init_pos
-        pos_rotated = np.dot(
-            pos_mapped, np.array(p.getMatrixFromQuaternion(init_rot)).reshape(3, -1).T
-        )
-        angle = np.arctan2(pos_rotated[0], pos_rotated[1])
+        translation = pos - init_pos
 
-        return dist > self.config.PUSH_SUCCESS_DIST and (
-            abs(angle) < self.config.PUSH_SUCCESS_ANGLE
-            or abs(abs(angle) - np.pi) < self.config.PUSH_SUCCESS_ANGLE
+        translation_local = np.dot(
+            translation, np.array(p.getMatrixFromQuaternion(init_rot)).reshape(3, -1)
+        )
+
+        total_dist = np.linalg.norm(translation_local)
+
+        if total_dist > 0:
+            angle_from_positive_x = np.arccos(
+                np.clip(translation_local[0] / total_dist, -1.0, 1.0)
+            )
+            angle_from_negative_x = np.arccos(
+                np.clip(-translation_local[0] / total_dist, -1.0, 1.0)
+            )
+        else:
+            angle_from_positive_x = np.pi / 2
+            angle_from_negative_x = np.pi / 2
+
+        return total_dist > self.config.PUSH_SUCCESS_DIST and (
+                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _evaluate_success(self):
@@ -495,7 +507,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-        ]  # the distance to the object (approximately)
+            ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -587,7 +599,8 @@ if __name__ == "__main__":
         Task.PUSHING.value,
         object_path,
         offset=(0.1, 0, 0),
-        rot=(0, 0, 2 * np.pi / 4),
+        rot=(0, 0, 2.5 * np.pi / 4),
+        scale=2,
     )
 
     # rotation which simplifies the demonstration
