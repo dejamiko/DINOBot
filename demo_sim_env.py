@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import pybullet as p
+from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -13,13 +14,13 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-            self,
-            config,
-            task_type,
-            object_path,
-            scale=1.0,
-            offset=(0, 0, 0),
-            rot=(0, 0, 0),
+        self,
+        config,
+        task_type,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot)
@@ -272,7 +273,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-            self, joint_positions, joint_velocities=None
+        self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -484,8 +485,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _evaluate_success(self):
@@ -507,7 +508,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-            ]  # the distance to the object (approximately)
+        ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -589,18 +590,17 @@ if __name__ == "__main__":
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    # obj_name = "YcbBanana"
-    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    i = 133
-    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    obj_name = "YcbPowerDrill"
+    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # i = 238
+    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
         config,
         Task.PUSHING.value,
         object_path,
         offset=(0.1, 0, 0),
-        rot=(0, 0, 2.5 * np.pi / 4),
-        scale=2,
+        rot=(0, 0, 3 * np.pi / 4),
     )
 
     # rotation which simplifies the demonstration

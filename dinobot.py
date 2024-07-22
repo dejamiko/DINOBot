@@ -331,5 +331,7 @@ if __name__ == "__main__":
     config.SEED = 0
     config.BASE_URL = "http://localhost:8080/"
     db = DB(config)
-    success, tries = run_dino_once(config, db, "banana", "banana", Task.PUSHING.value)
+    success, tries = run_dino_once(
+        config, db, "power_drill", "power_drill", Task.PUSHING.value
+    )
     print(success, tries)

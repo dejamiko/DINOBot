@@ -314,6 +314,7 @@ scales = {
         "227": 1.5,
         "228": 1.5,
         "238": 1.5,
+        "gelatin_box": 1.5,
     },
     Task.HAMMERING.value: {},
 }
@@ -329,7 +330,9 @@ rotations = {
         "mini_cheetah": (0, np.pi, 0),
     },
     Task.PUSHING.value: {
-        "banana": (0, 0, np.pi / 2),
+        "banana": (0, 0, 3 * np.pi / 2),
+        "gelatin_box": (0, 0, 3 * np.pi / 4),
+        "power_drill": (0, 0, 3 * np.pi / 4),
     },
     Task.HAMMERING.value: {},
 }
