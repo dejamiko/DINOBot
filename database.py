@@ -281,7 +281,21 @@ urdf_paths = {
     "mini_cheetah": "mini_cheetah/mini_cheetah.urdf",
     "minitaur": "quadruped/minitaur.urdf",
     "mug": "urdf/mug.urdf",
+    "duck": "duck_vhacd.urdf",
+    "007": "random_urdfs/007/007.urdf",
+    "014": "random_urdfs/014/014.urdf",
+    "024": "random_urdfs/024/024.urdf",
+    "033": "random_urdfs/033/033.urdf",
+    "088": "random_urdfs/088/088.urdf",
+    "117": "random_urdfs/117/117.urdf",
+    "119": "random_urdfs/119/119.urdf",
     "132": "random_urdfs/132/132.urdf",
+    "133": "random_urdfs/133/133.urdf",
+    "184": "random_urdfs/184/184.urdf",
+    "185": "random_urdfs/185/185.urdf",
+    "227": "random_urdfs/227/227.urdf",
+    "228": "random_urdfs/228/228.urdf",
+    "238": "random_urdfs/238/238.urdf",
 }
 
 scales = {
@@ -295,7 +309,12 @@ scales = {
         "minitaur": 0.25,
         "mug": 0.8,
     },
-    Task.PUSHING.value: {},
+    Task.PUSHING.value: {
+        "185": 1.5,
+        "227": 1.5,
+        "228": 1.5,
+        "238": 1.5,
+    },
     Task.HAMMERING.value: {},
 }
 
@@ -362,7 +381,7 @@ def create_and_populate_db(config):
                 positions[task].get(object_name, None),
                 rotations[task].get(object_name, None),
             )
-    # populate_transfers(db)
+    populate_transfers(db)
     return db
 
 
@@ -370,4 +389,6 @@ if __name__ == "__main__":
     config = Config()
     db = create_and_populate_db(config)
     print(db.get_all_object_names_for_task(Task.GRASPING.value))
+    print(db.get_all_object_names_for_task(Task.PUSHING.value))
     print(db.get_demo("banana", Task.GRASPING.value))
+    print(db.get_demo("banana", Task.PUSHING.value))

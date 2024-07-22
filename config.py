@@ -58,6 +58,7 @@ class Config:
     GRASP_SUCCESS_HEIGHT = 0.2
     PUSH_SUCCESS_DIST = 0.2
     PUSH_SUCCESS_ANGLE = 0.174533  # 10 degrees in radians
+    PUSH_LOAD_OBJECT_ROT = (0, 0, np.pi / 2)
 
     def get_dino_config(self):
         return {

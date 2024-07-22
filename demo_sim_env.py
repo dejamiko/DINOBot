@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 import pybullet as p
-from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -108,6 +107,7 @@ class DemoSimEnv(SimEnv):
 
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
+        print(success)
         return success
 
     def reset(self, task_type=None):
@@ -477,8 +477,8 @@ class DemoSimEnv(SimEnv):
 
         return dist > self.config.PUSH_SUCCESS_DIST and (
             abs(angle) < self.config.PUSH_SUCCESS_ANGLE
-            or abs(angle) - np.pi < self.config.PUSH_SUCCESS_ANGLE
-        )  # TODO Make sure this works
+            or abs(abs(angle) - np.pi) < self.config.PUSH_SUCCESS_ANGLE
+        )
 
     def _evaluate_success(self):
         if self.task == Task.GRASPING.value:
@@ -581,14 +581,19 @@ if __name__ == "__main__":
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    obj_name = "YcbPowerDrill"
-    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # obj_name = "YcbBanana"
+    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    i = 133
+    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
-        config, Task.PUSHING.value, object_path, offset=(0.1, 0, 0), rot=(0, 0, 1)
+        config,
+        Task.PUSHING.value,
+        object_path,
+        offset=(0.1, 0, 0),
+        rot=(0, 0, 2 * np.pi / 4),
     )
 
-    # TODO store the rotation in the db (so that the pushing along the short axis is a success) and not store the helper
     # rotation which simplifies the demonstration
 
     record_demo_with_keyboard()

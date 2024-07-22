@@ -101,9 +101,13 @@ class SimEnv:
         :param scale: The scale to be used for the object model
         :param offset: The offset to the initial object position
         :param rot: The rotation applied to the initial object rotation
+        :param adj_rot: An adjustment rotation applied to the initial object rotation used for easier demo recording
         """
         # load the object on the table somewhere random (within a certain range)
-        if task_type == Task.GRASPING.value or task_type == Task.PUSHING.value:
+        if task_type == Task.GRASPING.value:
+            self._load_object_on_the_table(object_path, offset, rot, scale)
+        elif task_type == Task.PUSHING.value:
+            rot = np.array(self.config.PUSH_LOAD_OBJECT_ROT) + rot
             self._load_object_on_the_table(object_path, offset, rot, scale)
         elif task_type == Task.HAMMERING.value:
             self._load_object_in_the_gripper(object_path, offset, rot, scale)
@@ -354,7 +358,11 @@ class SimEnv:
             p.stepSimulation()
         self.object_initial_pos_and_rot = (
             np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
-            np.array(p.getBasePositionAndOrientation(self.objects["object"])[1]),
+            np.array(
+                p.getQuaternionFromEuler(
+                    np.array((0, 0, angle)) + self.config.PUSH_LOAD_OBJECT_ROT
+                )
+            ),
         )
         # move the arm so the camera can see the object
         eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
