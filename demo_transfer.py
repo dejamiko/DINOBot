@@ -127,10 +127,11 @@ def ingest_transfers():
         success = replay_transfer(config, db, base, target, num, Task.GRASPING.value)
         if (base, target) not in results:
             results[(base, target)] = 0
-        results[(base, target)] += success
+        if success:
+            results[(base, target)] += 1
         if prev is not None and (base, target) != prev:
             print(
-                f"For transfer {base}->{target}: {results[(base, target)]}/10 success rate with -1 steps on average"
+                f"For transfer {prev[0]}->{prev[1]}: {results[prev]}/10 success rate with -1 steps on average"
             )
         prev = (base, target)
         if i % 10 == 0:
@@ -141,5 +142,5 @@ def ingest_transfers():
 
 if __name__ == "__main__":
     # run_cross_experiment(Task.GRASPING.value)
-    run_self_experiment(Task.PUSHING.value)
-    # ingest_transfers()
+    # run_self_experiment(Task.PUSHING.value)
+    ingest_transfers()
