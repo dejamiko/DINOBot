@@ -107,7 +107,6 @@ class DemoSimEnv(SimEnv):
 
         p.removeUserDebugItem(self.objects["replaying_text"])
         self.objects.pop("replaying_text")
-        print(success)
         return success
 
     def reset(self, task_type=None):
@@ -470,10 +469,7 @@ class DemoSimEnv(SimEnv):
         pos_rotated = np.dot(
             pos_mapped, np.array(p.getMatrixFromQuaternion(init_rot)).reshape(3, -1).T
         )
-        print("pos_rot", pos_rotated)
         angle = np.arctan2(pos_rotated[0], pos_rotated[1])
-        print("angle", angle)
-        print("dist", dist)
 
         return dist > self.config.PUSH_SUCCESS_DIST and (
             abs(angle) < self.config.PUSH_SUCCESS_ANGLE
