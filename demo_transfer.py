@@ -7,6 +7,8 @@ from demo_sim_env import DemoSimEnv
 from dinobot import run_dino_once
 from task_types import Task
 
+from pybullet_object_models import ycb_objects
+
 
 def find_first(base, target, config, num_tries):
     i = 0
@@ -28,6 +30,9 @@ def run_self_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
+    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
+        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
+    )
     db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
@@ -59,6 +64,9 @@ def run_cross_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
+    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
+        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
+    )
     db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
