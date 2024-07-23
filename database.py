@@ -64,6 +64,9 @@ class DB:
             "rot_r FLOAT,"
             "rot_p FLOAT,"
             "rot_y FLOAT,"
+            "rot_r_adj FLOAT,"
+            "rot_p_adj FLOAT,"
+            "rot_y_adj FLOAT,"
             "FOREIGN KEY (object_id) REFERENCES objects(object_id),"
             "UNIQUE (object_id, task)"
             ")"
@@ -115,9 +118,20 @@ class DB:
             object_id is not None
         ), f"There is no object {object_name} in the database"
 
-        scale, pos_x, pos_y, pos_z, rot_r, rot_p, rot_y = self.con.execute(
+        (
+            scale,
+            pos_x,
+            pos_y,
+            pos_z,
+            rot_r,
+            rot_p,
+            rot_y,
+            rot_r_adj,
+            rot_p_adj,
+            rot_y_adj,
+        ) = self.con.execute(
             (
-                f"SELECT scale, pos_x, pos_y, pos_z, rot_r, rot_p, rot_y "
+                f"SELECT scale, pos_x, pos_y, pos_z, rot_r, rot_p, rot_y, rot_r_adj, rot_p_adj, rot_y_adj "
                 f"FROM demonstrations WHERE object_id=? AND task=?"
             ),
             (object_id, task),
@@ -137,8 +151,17 @@ class DB:
         rot_r = 0.0 if rot_r is None else rot_r
         rot_p = 0.0 if rot_p is None else rot_p
         rot_y = 0.0 if rot_y is None else rot_y
+        rot_r_adj = 0.0 if rot_r_adj is None else rot_r_adj
+        rot_p_adj = 0.0 if rot_p_adj is None else rot_p_adj
+        rot_y_adj = 0.0 if rot_y_adj is None else rot_y_adj
 
-        return load_path, scale, (pos_x, pos_y, pos_z), (rot_r, rot_p, rot_y)
+        return (
+            load_path,
+            scale,
+            (pos_x, pos_y, pos_z),
+            (rot_r, rot_p, rot_y),
+            (rot_r_adj, rot_p_adj, rot_y_adj),
+        )
 
     def get_success_rate(self, object_name_1, object_name_2, task):
         object_id_1 = self._get_object_id_by_name(object_name_1)
@@ -184,7 +207,9 @@ class DB:
                     (None, object_name, urdf_path, source),
                 )
 
-    def add_demo(self, object_name, task, demo_path, scale=None, pos=None, rot=None):
+    def add_demo(
+        self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
+    ):
         self._check_path(demo_path, ".json")
 
         object_id = self._get_object_id_by_name(object_name)
@@ -204,18 +229,52 @@ class DB:
         else:
             r, p, yaw = None, None, None
 
+        if rot_adj is not None:
+            r_adj, p_adj, yaw_adj = rot_adj
+        else:
+            r_adj, p_adj, yaw_adj = None, None, None
+
         with self.con as c:
             if prev is not None:
                 c.execute(
                     f"UPDATE demonstrations "
-                    f"SET demo_path=?, scale=?, pos_x=?, pos_y=?, pos_z=?, rot_r=?, rot_p=?, rot_y=? "
+                    f"SET demo_path=?, scale=?, pos_x=?, pos_y=?, pos_z=?, rot_r=?, rot_p=?, rot_y=?, "
+                    f"rot_r_adj=?, rot_p_adj=?, rot_y_adj=? "
                     f"WHERE object_id=? AND task=?",
-                    (demo_path, scale, x, y, z, r, p, yaw, object_id, task),
+                    (
+                        demo_path,
+                        scale,
+                        x,
+                        y,
+                        z,
+                        r,
+                        p,
+                        yaw,
+                        r_adj,
+                        p_adj,
+                        yaw_adj,
+                        object_id,
+                        task,
+                    ),
                 )
             else:
                 c.execute(
-                    f"INSERT INTO demonstrations VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    (object_id, task, demo_path, scale, x, y, z, r, p, yaw),
+                    f"INSERT INTO demonstrations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        object_id,
+                        task,
+                        demo_path,
+                        scale,
+                        x,
+                        y,
+                        z,
+                        r,
+                        p,
+                        yaw,
+                        r_adj,
+                        p_adj,
+                        yaw_adj,
+                    ),
                 )
 
     def add_transfer(self, object_name_1, object_name_2, task, success_rate):
@@ -256,6 +315,10 @@ class DB:
         res = res.fetchone()
 
         return res[0] if res is not None else res
+
+    def get_nail_object(self):
+        # TODO this is hard-coded and not nice at all
+        return self.get_load_info("chips_can", Task.GRASPING.value)[0]
 
 
 ycb_names = [
@@ -459,6 +522,7 @@ def create_and_populate_db(config):
                 scales[task].get(object_name, None),
                 positions[task].get(object_name, None),
                 rotations[task].get(object_name, None),
+                adj_rotations[task].get(object_name, None),
             )
     populate_transfers(db)
     return db

@@ -99,6 +99,7 @@ class SimEnv:
         offset=(0, 0, 0),
         rot=(0, 0, 0),
         adj_rot=(0, 0, 0),
+        nail_path=None,
     ):
         """
         Load an object in the appropriate place depending on the task
@@ -112,9 +113,13 @@ class SimEnv:
         if task_type == Task.GRASPING.value:
             self._load_object_on_the_table(object_path, offset, rot, scale)
         elif task_type == Task.PUSHING.value:
-            self._load_object_on_the_table_save_pose(object_path, offset, rot, scale, adj_rot)
+            self._load_object_on_the_table_save_pose(
+                object_path, offset, rot, scale, adj_rot
+            )
         elif task_type == Task.HAMMERING.value:
-            self._load_object_with_nail(object_path, offset, rot, scale, adj_rot)
+            self._load_object_with_nail(
+                object_path, offset, rot, scale, adj_rot, nail_path
+            )
         else:
             raise ValueError(f"Unknown task type {task_type}")
 
@@ -400,7 +405,9 @@ class SimEnv:
         )
         return angle, pos_x, pos_y
 
-    def _load_object_with_nail(self, object_path, offset, rot, scale, adj_rot):
+    def _load_object_with_nail(
+        self, object_path, offset, rot, scale, adj_rot, nail_path
+    ):
         angle, pos_x, pos_y = self._get_position_and_rotation()
         self._load_object_and_move_arm(
             angle, object_path, offset, pos_x, pos_y, rot, scale
@@ -409,7 +416,9 @@ class SimEnv:
         object_pos, object_rot = p.getBasePositionAndOrientation(self.objects["object"])
 
         rot = np.dot(
-            np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler(adj_rot))).reshape(3, -1),
+            np.array(
+                p.getMatrixFromQuaternion(p.getQuaternionFromEuler(adj_rot))
+            ).reshape(3, -1),
             np.array(p.getMatrixFromQuaternion(object_rot)).reshape(3, -1),
         )
 
@@ -418,7 +427,7 @@ class SimEnv:
         )
 
         self.objects["nail"] = p.loadURDF(
-            self.config.HAMMERING_ADDITIONAL_OBJECT_PATH,
+            nail_path,
             nail_position,
             p.getQuaternionFromEuler(self.config.HAMMERING_ADDITIONAL_OBJECT_ROTATION),
             globalScaling=self.config.HAMMERING_ADDITIONAL_OBJECT_SCALE,

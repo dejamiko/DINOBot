@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 import pybullet as p
-from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -14,17 +13,18 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-            self,
-            config,
-            task_type,
-            object_path,
-            scale=1.0,
-            offset=(0, 0, 0),
-            rot=(0, 0, 0),
-            adj_rot=(0, 0, 0),
+        self,
+        config,
+        task_type,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
+        adj_rot=(0, 0, 0),
+        nail_path=None,
     ):
         super(DemoSimEnv, self).__init__(config)
-        self.object_info = (object_path, scale, offset, rot, adj_rot)
+        self.object_info = (object_path, scale, offset, rot, adj_rot, nail_path)
         self.task = task_type
 
         self.gripper_open = False
@@ -63,20 +63,6 @@ class DemoSimEnv(SimEnv):
 
         self._create_debug_dot()
 
-    def _create_debug_dot(self):
-        dot = p.createVisualShape(
-            p.GEOM_SPHERE,
-            radius=0.02,
-            rgbaColor=[1, 0, 0, 1],
-            visualFramePosition=(0, 1, 2),
-        )
-        self.objects["dot"] = p.createMultiBody(
-            baseVisualShapeIndex=dot,
-            baseMass=0,
-            baseInertialFramePosition=(0, 1, 2),
-        )
-        self.dot_is_red = True
-
     def control_arm_with_keyboard(self):
         """
         Control the arm in the simulation using the keyboard.
@@ -87,23 +73,6 @@ class DemoSimEnv(SimEnv):
         self._control_movement_with_keys(keys)
         self._control_flow_with_keys(keys)
         self._update_debug_dot()
-
-    def _update_debug_dot(self):
-        suc = self._evaluate_success()
-        if suc and self.dot_is_red:
-            self.dot_is_red = False
-            p.changeVisualShape(
-                self.objects["dot"],
-                -1,
-                rgbaColor=[0, 1, 0, 1],
-            )
-        elif not suc and not self.dot_is_red:
-            self.dot_is_red = True
-            p.changeVisualShape(
-                self.objects["dot"],
-                -1,
-                rgbaColor=[1, 0, 0, 1],
-            )
 
     def replay_demo(self, demo):
         """
@@ -311,7 +280,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-            self, joint_positions, joint_velocities=None
+        self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -523,8 +492,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _determine_hammering_success(self):
@@ -544,7 +513,7 @@ class DemoSimEnv(SimEnv):
 
         for point in contact_points:
             if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
-                    point[7]
+                point[7]
             ):
                 return True
 
@@ -569,7 +538,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-            ]  # the distance to the object (approximately)
+        ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -636,6 +605,37 @@ class DemoSimEnv(SimEnv):
                 latest_path = directory + f
         self.load_state(latest_path)
 
+    def _update_debug_dot(self):
+        suc = self._evaluate_success()
+        if suc and self.dot_is_red:
+            self.dot_is_red = False
+            p.changeVisualShape(
+                self.objects["dot"],
+                -1,
+                rgbaColor=[0, 1, 0, 1],
+            )
+        elif not suc and not self.dot_is_red:
+            self.dot_is_red = True
+            p.changeVisualShape(
+                self.objects["dot"],
+                -1,
+                rgbaColor=[1, 0, 0, 1],
+            )
+
+    def _create_debug_dot(self):
+        dot = p.createVisualShape(
+            p.GEOM_SPHERE,
+            radius=0.02,
+            rgbaColor=[1, 0, 0, 1],
+            visualFramePosition=(0, 1, 2),
+        )
+        self.objects["dot"] = p.createMultiBody(
+            baseVisualShapeIndex=dot,
+            baseMass=0,
+            baseInertialFramePosition=(0, 1, 2),
+        )
+        self.dot_is_red = True
+
 
 def record_demo_with_keyboard():
     while True:
@@ -650,9 +650,6 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
-    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
-        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
-    )
 
     # obj_name = "YcbHammer"
     # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
@@ -666,7 +663,7 @@ if __name__ == "__main__":
         offset=(0, 0, 0),
         rot=(0, 0, 6 * np.pi / 4),
         adj_rot=(0, 0, np.pi),
-        scale=1.2
+        scale=1.2,
     )
 
     # rotation which simplifies the demonstration

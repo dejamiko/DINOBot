@@ -31,9 +31,6 @@ def run_self_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
-    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
-        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
-    )
     db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
@@ -65,9 +62,6 @@ def run_cross_experiment(task):
     config.USE_FAST_CORRESPONDENCES = True
     config.USE_GUI = False
     config.RUN_LOCALLY = True
-    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
-        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
-    )
     db = DB(config)
 
     names = db.get_all_object_names_for_task(task)
@@ -79,7 +73,9 @@ def run_cross_experiment(task):
         for target in names:
             all_tries = []
             success_count = 0
-            for s in range(find_first(base, target, config, num_tries, task), num_tries):
+            for s in range(
+                find_first(base, target, config, num_tries, task), num_tries
+            ):
                 config.SEED = s
                 success, tries = run_dino_once(config, db, base, target, task)
                 if success:
@@ -95,7 +91,9 @@ def run_cross_experiment(task):
 
 
 def replay_transfer(config, db, base_object, target_object, num, task):
-    sim = DemoSimEnv(config, task, *db.get_load_info(target_object, task))
+    sim = DemoSimEnv(
+        config, task, *db.get_load_info(target_object, task), db.get_nail_object()
+    )
     sim.load_state(
         f"_generated/transfers/{task}/transfer_{base_object}_{target_object}_{str(num).zfill(3)}.json"
     )

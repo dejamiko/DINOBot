@@ -304,7 +304,9 @@ def run_dino_once(config, db, base_object, target_object, task):
     try:
         image_directory = set_up_images_directory(config)
 
-        env = DemoSimEnv(config, task, *db.get_load_info(target_object, task))
+        env = DemoSimEnv(
+            config, task, *db.get_load_info(target_object, task), db.get_nail_object()
+        )
         data = env.load_demonstration(db.get_demo(base_object, task))
 
         success, tries = deploy_dinobot(
@@ -328,10 +330,8 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    config.SEED = 1
+    config.SEED = 0
     config.BASE_URL = "http://localhost:8080/"
     db = DB(config)
-    success, tries = run_dino_once(
-        config, db, "power_drill", "power_drill", Task.PUSHING.value
-    )
+    success, tries = run_dino_once(config, db, "000", "000", Task.HAMMERING.value)
     print(success, tries)

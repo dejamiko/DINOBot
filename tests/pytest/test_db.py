@@ -54,6 +54,7 @@ def db_fixture_pop(db_fixture_objects):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     db_fixture_objects.add_demo(
         "object_name_2",
@@ -62,6 +63,7 @@ def db_fixture_pop(db_fixture_objects):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     db_fixture_objects.add_demo(
         "object_name_1",
@@ -107,22 +109,26 @@ def test_get_load_info(db_fixture_pop):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     assert db_fixture_pop.get_load_info("object_name_2", Task.GRASPING.value) == (
         "tests/_test_assets/urdf2.urdf",
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     assert db_fixture_pop.get_load_info("object_name_1", Task.PUSHING.value) == (
         "tests/_test_assets/urdf1.urdf",
         1.0,
         (0, 0, 0),
         (0, 0, 0),
+        (0, 0, 0),
     )
     assert db_fixture_pop.get_load_info("object_name_2", Task.PUSHING.value) == (
         "tests/_test_assets/urdf2.urdf",
         1.0,
+        (0, 0, 0),
         (0, 0, 0),
         (0, 0, 0),
     )
@@ -156,6 +162,7 @@ def test_add_object_with_same_name_updates(db_fixture_pop):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     db_fixture_pop.add_object("object_name_1", "_test_assets/urdf3.urdf", "test")
     assert db_fixture_pop.get_load_info("object_name_1", Task.GRASPING.value) == (
@@ -163,6 +170,7 @@ def test_add_object_with_same_name_updates(db_fixture_pop):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
 
 
@@ -178,6 +186,7 @@ def test_add_demo_with_same_name_and_task_updates(db_fixture_pop):
         1.23,
         (1, 2, 3),
         (1.1, 2.2, 3.3),
+        (1.11, 2.22, 3.33),
     )
     assert (
         db_fixture_pop.get_demo("object_name_1", Task.GRASPING.value)
