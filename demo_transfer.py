@@ -10,12 +10,13 @@ from task_types import Task
 from pybullet_object_models import ycb_objects
 
 
-def find_first(base, target, config, num_tries):
+def find_first(base, target, config, num_tries, task):
     i = 0
     while i < num_tries:
         filename = os.path.join(
             config.BASE_DIR,
             "transfers",
+            task,
             f"transfer_{base}_{target}_{str(i).zfill(3)}.json",
         )
         if not os.path.exists(filename):
@@ -43,7 +44,7 @@ def run_self_experiment(task):
     for name in names:
         all_tries = []
         success_count = 0
-        for s in range(find_first(name, name, config, num_tries), num_tries):
+        for s in range(find_first(name, name, config, num_tries, task), num_tries):
             config.SEED = s
             success, tries = run_dino_once(config, db, name, name, task)
             if success:
@@ -78,7 +79,7 @@ def run_cross_experiment(task):
         for target in names:
             all_tries = []
             success_count = 0
-            for s in range(find_first(base, target, config, num_tries), num_tries):
+            for s in range(find_first(base, target, config, num_tries, task), num_tries):
                 config.SEED = s
                 success, tries = run_dino_once(config, db, base, target, task)
                 if success:
