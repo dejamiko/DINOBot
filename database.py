@@ -281,7 +281,6 @@ urdf_paths = {
     "mini_cheetah": "mini_cheetah/mini_cheetah.urdf",
     "minitaur": "quadruped/minitaur.urdf",
     "mug": "urdf/mug.urdf",
-    "duck": "duck_vhacd.urdf",
     "007": "random_urdfs/007/007.urdf",
     "014": "random_urdfs/014/014.urdf",
     "024": "random_urdfs/024/024.urdf",
@@ -310,10 +309,12 @@ scales = {
         "mug": 0.8,
     },
     Task.PUSHING.value: {
+        "024": 1.2,
         "185": 1.5,
         "227": 1.5,
         "228": 1.5,
         "238": 1.5,
+        "cracker_box": 0.8,
         "gelatin_box": 1.5,
     },
     Task.HAMMERING.value: {},
@@ -356,6 +357,18 @@ def populate_transfers(db):
             m = reg.match(l)
             base, target, num = m.groups()
             db.add_transfer(base, target, Task.GRASPING.value, int(num) / 10.0)
+
+    with open("_generated/grasping_cross_experiment_replays") as f:
+        lines = f.readlines()
+        for l in lines:
+            m = reg.match(l)
+            base, target, num = m.groups()
+            num = int(num) / 10.0
+            num2 = db.get_success_rate(base, target, Task.GRASPING.value)
+            if num != num2:
+                print(f"{base}->{target}, {num} and {num2}")
+            else:
+                print("The same")
 
 
 def create_and_populate_db(config):

@@ -328,7 +328,7 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    config.SEED = 0
+    config.SEED = 1
     config.BASE_URL = "http://localhost:8080/"
     db = DB(config)
     success, tries = run_dino_once(
