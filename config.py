@@ -59,6 +59,14 @@ class Config:
     PUSH_SUCCESS_DIST = 0.3
     PUSH_SUCCESS_ANGLE = 0.436332  # 45 degrees in radians
 
+    HAMMERING_ADDITIONAL_OBJECT_PATH = ""
+    HAMMERING_ADDITIONAL_OBJECT_OFFSET = (0.15, 0, 0)
+    HAMMERING_ADDITIONAL_OBJECT_ROTATION = (0, 0, 0)
+    HAMMERING_ADDITIONAL_OBJECT_SCALE = 0.5
+
+    HAMMERING_SUCCESS_FORCE = 200
+    HAMMERING_SUCCESS_ALIGNMENT = 0.95
+
     def get_dino_config(self):
         return {
             "num_pairs": self.NUM_PAIRS,

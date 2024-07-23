@@ -295,6 +295,23 @@ urdf_paths = {
     "227": "random_urdfs/227/227.urdf",
     "228": "random_urdfs/228/228.urdf",
     "238": "random_urdfs/238/238.urdf",
+    "000": "random_urdfs/000/000.urdf",
+    "011": "random_urdfs/011/011.urdf",
+    "016": "random_urdfs/016/016.urdf",
+    "020": "random_urdfs/020/020.urdf",
+    "052": "random_urdfs/052/052.urdf",
+    "057": "random_urdfs/057/057.urdf",
+    "058": "random_urdfs/058/058.urdf",
+    "078": "random_urdfs/078/078.urdf",
+    "080": "random_urdfs/080/080.urdf",
+    "081": "random_urdfs/081/081.urdf",
+    "083": "random_urdfs/083/083.urdf",
+    "090": "random_urdfs/090/090.urdf",
+    "114": "random_urdfs/114/114.urdf",
+    "115": "random_urdfs/115/115.urdf",
+    "126": "random_urdfs/126/126.urdf",
+    "147": "random_urdfs/147/147.urdf",
+    "157": "random_urdfs/157/157.urdf",
 }
 
 scales = {
@@ -317,7 +334,13 @@ scales = {
         "cracker_box": 0.8,
         "gelatin_box": 1.5,
     },
-    Task.HAMMERING.value: {},
+    Task.HAMMERING.value: {
+        "016": 1.3,
+        "026": 1.2,
+        "052": 1.2,
+        "078": 1.2,
+        "157": 1.2,
+    },
 }
 
 positions = {
@@ -330,12 +353,50 @@ rotations = {
     Task.GRASPING.value: {
         "mini_cheetah": (0, np.pi, 0),
     },
+    Task.PUSHING.value: {},
+    Task.HAMMERING.value: {
+        "hammer": (0, 0, np.pi / 2),
+        "000": (0, 0, 3 * np.pi / 2),
+        "007": (0, 0, 1 * np.pi / 2),
+        "011": (0, 0, 6 * np.pi / 4),
+        "016": (0, 0, 2 * np.pi / 4),
+        "020": (0, 0, 6 * np.pi / 4),
+        "026": (0, 0, 6 * np.pi / 4),
+        "052": (0, 0, 2 * np.pi / 4),
+        "057": (0, 0, 6 * np.pi / 4),
+        "058": (0, 0, 6 * np.pi / 4),
+        "078": (0, 0, 2 * np.pi / 4),
+        "080": (0, 0, 2 * np.pi / 4),
+        "081": (0, 0, 2 * np.pi / 4),
+        "083": (0, 0, 2 * np.pi / 4),
+        "090": (0, 0, 2 * np.pi / 4),
+        "114": (0, 0, 6 * np.pi / 4),
+        "115": (0, 0, 6 * np.pi / 4),
+        "126": (0, 0, 6 * np.pi / 4),
+        "147": (0, 0, 2 * np.pi / 4),
+        "157": (0, 0, 6 * np.pi / 4),
+    },
+}
+
+adj_rotations = {
+    Task.GRASPING.value: {},
     Task.PUSHING.value: {
         "banana": (0, 0, 3 * np.pi / 2),
         "gelatin_box": (0, 0, 3 * np.pi / 4),
         "power_drill": (0, 0, 3 * np.pi / 4),
     },
-    Task.HAMMERING.value: {},
+    Task.HAMMERING.value: {
+        "000": (0, 0, np.pi),
+        "011": (0, 0, np.pi),
+        "020": (0, 0, np.pi),
+        "026": (0, 0, np.pi),
+        "057": (0, 0, np.pi),
+        "058": (0, 0, np.pi),
+        "114": (0, 0, np.pi),
+        "115": (0, 0, np.pi),
+        "126": (0, 0, np.pi),
+        "157": (0, 0, np.pi),
+    },
 }
 
 
@@ -408,5 +469,7 @@ if __name__ == "__main__":
     db = create_and_populate_db(config)
     print(db.get_all_object_names_for_task(Task.GRASPING.value))
     print(db.get_all_object_names_for_task(Task.PUSHING.value))
+    print(db.get_all_object_names_for_task(Task.HAMMERING.value))
     print(db.get_demo("banana", Task.GRASPING.value))
     print(db.get_demo("banana", Task.PUSHING.value))
+    print(db.get_demo("hammer", Task.HAMMERING.value))

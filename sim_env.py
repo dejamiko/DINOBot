@@ -92,7 +92,13 @@ class SimEnv:
         self.move_to_target_joint_position(home_position)
 
     def load_object(
-        self, task_type, object_path, scale=1.0, offset=(0, 0, 0), rot=(0, 0, 0)
+        self,
+        task_type,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
+        adj_rot=(0, 0, 0),
     ):
         """
         Load an object in the appropriate place depending on the task
@@ -104,11 +110,11 @@ class SimEnv:
         """
         # load the object on the table somewhere random (within a certain range)
         if task_type == Task.GRASPING.value:
-            self._load_object_on_the_table(object_path, offset, rot, scale, (0, 0, 0))
+            self._load_object_on_the_table(object_path, offset, rot, scale)
         elif task_type == Task.PUSHING.value:
-            self._load_object_on_the_table(object_path, offset, (0, 0, 0), scale, rot)
+            self._load_object_on_the_table_save_pose(object_path, offset, rot, scale, adj_rot)
         elif task_type == Task.HAMMERING.value:
-            self._load_object_in_the_gripper(object_path, offset, rot, scale)
+            self._load_object_with_nail(object_path, offset, rot, scale, adj_rot)
         else:
             raise ValueError(f"Unknown task type {task_type}")
 
@@ -323,7 +329,7 @@ class SimEnv:
 
         self.move_to_target_joint_position(target_joint_positions)
 
-    def _load_object_on_the_table(self, object_path, offset, rot, scale, add_rot):
+    def _load_object_on_the_table(self, object_path, offset, rot, scale):
         """
         Load the object on the table and move the arm so the camera can see it.
         :param object_path: The path to the object URDF file
@@ -331,7 +337,54 @@ class SimEnv:
         :param offset: The offset to the initial object position
         :param rot: The rotation applied to the initial object rotation
         """
+        angle, pos_x, pos_y = self._get_position_and_rotation()
+        self._load_object_and_move_arm(
+            angle, object_path, offset, pos_x, pos_y, rot, scale
+        )
+
+    def _load_object_on_the_table_save_pose(
+        self, object_path, offset, rot, scale, adj_rot
+    ):
+        """
+        Load the object on the table and move the arm so the camera can see it.
+        :param object_path: The path to the object URDF file
+        :param scale: The scale to be used for the object model
+        :param offset: The offset to the initial object position
+        :param rot: The rotation applied to the initial object rotation
+        :param adj_rot: Adjustment rotation used for the object pose stored when loaded
+        """
+        angle, pos_x, pos_y = self._get_position_and_rotation()
+        self._load_object_and_move_arm(
+            angle, object_path, offset, pos_x, pos_y, rot, scale
+        )
+        self.object_initial_pos_and_rot = (
+            np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
+            p.getQuaternionFromEuler(rot + np.array((0, 0, angle)) + adj_rot),
+        )
+
+    def _load_object_and_move_arm(
+        self, angle, object_path, offset, pos_x, pos_y, rot, scale
+    ):
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
+        self.objects["object"] = p.loadURDF(
+            object_path,
+            offset + np.array((pos_x, pos_y, z_base)),
+            p.getQuaternionFromEuler(rot + np.array((0, 0, angle))),
+            globalScaling=scale,
+        )
+        # let the object drop
+        for i in range(100):
+            p.stepSimulation()
+        # move the arm so the camera can see the object
+        eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
+        if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
+            pos = [pos_x, pos_y, eef_pos[2]]
+        else:
+            pos = [x_base, y_base, eef_pos[2]]
+        self._move_to_target_position_and_rotation(pos)
+
+    def _get_position_and_rotation(self):
+        x_base, y_base, _ = self.config.OBJECT_X_Y_Z_BASE
         pos_x = (
             np.random.uniform(-0.05, 0.05) + x_base
             if self.config.RANDOM_OBJECT_POSITION
@@ -345,29 +398,31 @@ class SimEnv:
         angle = (
             np.random.uniform(0, np.pi / 2) if self.config.RANDOM_OBJECT_ROTATION else 0
         )
-        self.objects[f"object"] = p.loadURDF(
-            object_path,
-            offset + np.array((pos_x, pos_y, z_base)),
-            p.getQuaternionFromEuler(rot + np.array((0, 0, angle))),
-            globalScaling=scale,
-        )
-        # let the object drop
-        for i in range(100):
-            p.stepSimulation()
-        self.object_initial_pos_and_rot = (
-            np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
-            p.getQuaternionFromEuler(rot + np.array((0, 0, angle)) + add_rot),
-        )
-        # move the arm so the camera can see the object
-        eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
-        if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
-            pos = [pos_x, pos_y, eef_pos[2]]
-        else:
-            pos = [x_base, y_base, eef_pos[2]]
-        self._move_to_target_position_and_rotation(pos)
+        return angle, pos_x, pos_y
 
-    def _load_object_in_the_gripper(self, object_path, offset, rot, scale):
-        raise NotImplemented
+    def _load_object_with_nail(self, object_path, offset, rot, scale, adj_rot):
+        angle, pos_x, pos_y = self._get_position_and_rotation()
+        self._load_object_and_move_arm(
+            angle, object_path, offset, pos_x, pos_y, rot, scale
+        )
+
+        object_pos, object_rot = p.getBasePositionAndOrientation(self.objects["object"])
+
+        rot = np.dot(
+            np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler(adj_rot))).reshape(3, -1),
+            np.array(p.getMatrixFromQuaternion(object_rot)).reshape(3, -1),
+        )
+
+        nail_position = object_pos + np.dot(
+            self.config.HAMMERING_ADDITIONAL_OBJECT_OFFSET, rot.T
+        )
+
+        self.objects["nail"] = p.loadURDF(
+            self.config.HAMMERING_ADDITIONAL_OBJECT_PATH,
+            nail_position,
+            p.getQuaternionFromEuler(self.config.HAMMERING_ADDITIONAL_OBJECT_ROTATION),
+            globalScaling=self.config.HAMMERING_ADDITIONAL_OBJECT_SCALE,
+        )
 
     def _move_with_debug_dot(self, desired_pos, desired_rot):
         """
@@ -535,8 +590,5 @@ class SimEnv:
 
 
 if __name__ == "__main__":
-    """
-    A sample script to spawn some cubes on a table and move the robot arm towards one of them.
-    """
     config = Config()
     env = SimEnv(config)

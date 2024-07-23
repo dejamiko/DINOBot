@@ -14,16 +14,17 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-        self,
-        config,
-        task_type,
-        object_path,
-        scale=1.0,
-        offset=(0, 0, 0),
-        rot=(0, 0, 0),
+            self,
+            config,
+            task_type,
+            object_path,
+            scale=1.0,
+            offset=(0, 0, 0),
+            rot=(0, 0, 0),
+            adj_rot=(0, 0, 0),
     ):
         super(DemoSimEnv, self).__init__(config)
-        self.object_info = (object_path, scale, offset, rot)
+        self.object_info = (object_path, scale, offset, rot, adj_rot)
         self.task = task_type
 
         self.gripper_open = False
@@ -60,6 +61,22 @@ class DemoSimEnv(SimEnv):
 
         self.load_object(task_type, *self.object_info)
 
+        self._create_debug_dot()
+
+    def _create_debug_dot(self):
+        dot = p.createVisualShape(
+            p.GEOM_SPHERE,
+            radius=0.02,
+            rgbaColor=[1, 0, 0, 1],
+            visualFramePosition=(0, 1, 2),
+        )
+        self.objects["dot"] = p.createMultiBody(
+            baseVisualShapeIndex=dot,
+            baseMass=0,
+            baseInertialFramePosition=(0, 1, 2),
+        )
+        self.dot_is_red = True
+
     def control_arm_with_keyboard(self):
         """
         Control the arm in the simulation using the keyboard.
@@ -69,6 +86,24 @@ class DemoSimEnv(SimEnv):
         keys = list(keys.keys())
         self._control_movement_with_keys(keys)
         self._control_flow_with_keys(keys)
+        self._update_debug_dot()
+
+    def _update_debug_dot(self):
+        suc = self._evaluate_success()
+        if suc and self.dot_is_red:
+            self.dot_is_red = False
+            p.changeVisualShape(
+                self.objects["dot"],
+                -1,
+                rgbaColor=[0, 1, 0, 1],
+            )
+        elif not suc and not self.dot_is_red:
+            self.dot_is_red = True
+            p.changeVisualShape(
+                self.objects["dot"],
+                -1,
+                rgbaColor=[1, 0, 0, 1],
+            )
 
     def replay_demo(self, demo):
         """
@@ -102,6 +137,7 @@ class DemoSimEnv(SimEnv):
             else:
                 self._close_gripper()
             p.stepSimulation()
+            self._update_debug_dot()
             if self.config.USE_GUI:
                 time.sleep(1.0 / 2400.0)
             success = success or self._evaluate_success()
@@ -122,6 +158,7 @@ class DemoSimEnv(SimEnv):
         if task_type is not None:
             self.task = task_type
         self.load_object(self.task, *self.object_info)
+        self._create_debug_dot()
 
     @staticmethod
     def load_demonstration(filename):
@@ -164,6 +201,7 @@ class DemoSimEnv(SimEnv):
         self.task = data["task"]
         self.object_initial_pos_and_rot = (
             np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
+            # TODO add the rotation from DB to make sure the axes are correct
             np.array(p.getBasePositionAndOrientation(self.objects["object"])[1]),
         )
 
@@ -273,7 +311,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-        self, joint_positions, joint_velocities=None
+            self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -388,7 +426,7 @@ class DemoSimEnv(SimEnv):
         directory = f"demonstrations/{self.task}/"
         i = 0
         while True:
-            filename = f"{directory}demonstration_{str(i).zfill(3)}.json"
+            filename = f"{directory}demonstration_{str(i).zfill(2)}.json"
             if not os.path.exists(filename):
                 break
             i += 1
@@ -485,9 +523,32 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
+
+    def _determine_hammering_success(self):
+        # see if the nail was struck
+        contact_points = p.getContactPoints(
+            self.objects["object"], self.objects["nail"]
+        )
+
+        if contact_points is None or len(contact_points) == 0:
+            return False
+
+        def is_pointing_downwards(vector):
+            z_vector = (0, 0, 1)
+            alignment = np.dot(z_vector, vector)
+
+            return alignment > self.config.HAMMERING_SUCCESS_ALIGNMENT
+
+        for point in contact_points:
+            if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
+                    point[7]
+            ):
+                return True
+
+        return False
 
     def _evaluate_success(self):
         if self.task == Task.GRASPING.value:
@@ -495,7 +556,7 @@ class DemoSimEnv(SimEnv):
         elif self.task == Task.PUSHING.value:
             return self._determine_push_success()
         else:
-            raise NotImplemented()
+            return self._determine_hammering_success()
 
     def _take_demo_images(self):
         images, depth_buffers = [], []
@@ -508,7 +569,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-        ]  # the distance to the object (approximately)
+            ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -589,18 +650,23 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
+    config.HAMMERING_ADDITIONAL_OBJECT_PATH = os.path.join(
+        ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"
+    )
 
-    obj_name = "YcbPowerDrill"
-    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    # i = 238
-    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    # obj_name = "YcbHammer"
+    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    i = 157
+    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
         config,
-        Task.PUSHING.value,
+        Task.HAMMERING.value,
         object_path,
-        offset=(0.1, 0, 0),
-        rot=(0, 0, 3 * np.pi / 4),
+        offset=(0, 0, 0),
+        rot=(0, 0, 6 * np.pi / 4),
+        adj_rot=(0, 0, np.pi),
+        scale=1.2
     )
 
     # rotation which simplifies the demonstration
