@@ -1,6 +1,7 @@
 import os
 import shutil
 import time
+import traceback
 
 import cv2
 import numpy as np
@@ -318,7 +319,7 @@ def run_dino_once(config, db, base_object, target_object, task):
         if config.VERBOSITY > 0:
             print(success, tries)
     except Exception as e:
-        print(f"Exception raised {e}")
+        print(traceback.format_exc())
         if config.USE_GUI:
             raise e
         return False, -1
