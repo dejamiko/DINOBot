@@ -1,0 +1,21 @@
+For transfer hammer->hammer: 6/10 success rate with 2.1 steps on average
+
+For transfer 000->000: 9/10 success rate with 2.2 steps on average
+For transfer 007->007: 8/10 success rate with 2.2 steps on average
+For transfer 011->011: 7/10 success rate with 1.9 steps on average
+For transfer 016->016: 7/10 success rate with 2.4 steps on average
+For transfer 020->020: 8/10 success rate with 2.2 steps on average
+For transfer 024->024: 9/10 success rate with 2.5 steps on average
+For transfer 052->052: 9/10 success rate with 2.0 steps on average
+For transfer 057->057: 8/10 success rate with 2.0 steps on average
+For transfer 058->058: 7/10 success rate with 2.2 steps on average
+For transfer 078->078: 7/10 success rate with 2.1 steps on average
+For transfer 080->080: 7/10 success rate with 1.9 steps on average
+For transfer 081->081: 7/10 success rate with 2.6 steps on average
+For transfer 083->083: 9/10 success rate with 2.1 steps on average
+For transfer 090->090: 8/10 success rate with 2.0 steps on average
+For transfer 114->114: 7/10 success rate with 2.1 steps on average
+For transfer 115->115: t/10 success rate with 2.4 steps on average
+For transfer 126->126: 8/10 success rate with 2.4 steps on average
+For transfer 147->147: 8/10 success rate with 4.6 steps on average
+For transfer 157->157: 9/10 success rate with 2.5 steps on average

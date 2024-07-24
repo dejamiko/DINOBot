@@ -301,6 +301,11 @@ class SimEnv:
             )
         ]
 
+    @staticmethod
+    def pause():
+        for _ in range(1000):
+            p.stepSimulation()
+
     def _move_to_target_position_and_rotation(
         self, target_position, target_rotation=None
     ):
@@ -378,8 +383,7 @@ class SimEnv:
             globalScaling=scale,
         )
         # let the object drop
-        for i in range(100):
-            p.stepSimulation()
+        self.pause()
         # move the arm so the camera can see the object
         eef_pos = p.getLinkState(self.objects["arm"], 11)[0]
         if self.config.RANDOM_OBJECT_POSITION_FOLLOWING:
@@ -432,6 +436,8 @@ class SimEnv:
             p.getQuaternionFromEuler(self.config.HAMMERING_ADDITIONAL_OBJECT_ROTATION),
             globalScaling=self.config.HAMMERING_ADDITIONAL_OBJECT_SCALE,
         )
+
+        self.pause()
 
     def _move_with_debug_dot(self, desired_pos, desired_rot):
         """

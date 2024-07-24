@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import pybullet as p
+from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -206,11 +207,6 @@ class DemoSimEnv(SimEnv):
             i += 1
         with open(filename, "w") as f:
             json.dump(data, f)
-
-    @staticmethod
-    def pause():
-        for _ in range(10000):
-            p.stepSimulation()
 
     def _control_flow_with_keys(self, keys):
         """
@@ -651,19 +647,19 @@ if __name__ == "__main__":
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    # obj_name = "YcbHammer"
-    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    i = 157
-    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    obj_name = "YcbHammer"
+    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    # i = 157
+    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
         config,
         Task.HAMMERING.value,
         object_path,
         offset=(0, 0, 0),
-        rot=(0, 0, 6 * np.pi / 4),
-        adj_rot=(0, 0, np.pi),
-        scale=1.2,
+        rot=(0, 0, 2 * np.pi / 4),
+        adj_rot=(0, 0, 0),
+        nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
     )
 
     # rotation which simplifies the demonstration

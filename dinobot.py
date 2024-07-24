@@ -315,6 +315,8 @@ def run_dino_once(config, db, base_object, target_object, task):
         env.disconnect()
         if not config.USE_GUI:
             clear_images(image_directory)
+        if config.VERBOSITY > 0:
+            print(success, tries)
     except Exception as e:
         print(f"Exception raised {e}")
         if config.USE_GUI:
@@ -330,8 +332,7 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    config.SEED = 0
+    config.SEED = 8
     config.BASE_URL = "http://localhost:8080/"
     db = DB(config)
-    success, tries = run_dino_once(config, db, "000", "000", Task.HAMMERING.value)
-    print(success, tries)
+    success, tries = run_dino_once(config, db, "115", "115", Task.HAMMERING.value)
