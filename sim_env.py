@@ -138,12 +138,14 @@ class SimEnv:
 
         return rgb_image, depth_buffer
 
-    def reset(self):
+    def reset(self, go_home=True):
         """
         Reset the simulation environment.
         """
+        np.random.seed(self.config.SEED)
         self._setup_simulation_basic()
-        self.move_arm_to_home_position()
+        if go_home:
+            self.move_arm_to_home_position()
 
     def project_to_3d(self, points, depth):
         """

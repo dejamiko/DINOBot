@@ -103,14 +103,14 @@ def replay_transfer(config, db, base_object, target_object, num, task):
     return success
 
 
-def ingest_transfers():
+def ingest_transfers(task):
     config = Config()
     config.USE_GUI = False
     db = DB(config)
     config.VERBOSITY = 0
     results = {}
-    base_dir = "_generated/transfers/grasping/"
-    names = db.get_all_object_names_for_task("grasping")
+    base_dir = f"_generated/transfers/{task}/"
+    names = db.get_all_object_names_for_task(task)
     files = sorted(os.listdir(base_dir))
     start_time = time.time()
     prev = None
@@ -131,7 +131,7 @@ def ingest_transfers():
                 latest_occurrence = state.find(n)
                 target = n
         num = int(num)
-        success = replay_transfer(config, db, base, target, num, Task.GRASPING.value)
+        success = replay_transfer(config, db, base, target, num, task)
         if (base, target) not in results:
             results[(base, target)] = 0
         if success:
@@ -148,6 +148,6 @@ def ingest_transfers():
 
 
 if __name__ == "__main__":
-    run_cross_experiment(Task.PUSHING.value)
+    # run_cross_experiment(Task.PUSHING.value)
     # run_self_experiment(Task.HAMMERING.value)
-    # ingest_transfers()
+    ingest_transfers(Task.HAMMERING.value)

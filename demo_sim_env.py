@@ -14,15 +14,15 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-        self,
-        config,
-        task_type,
-        object_path,
-        scale=1.0,
-        offset=(0, 0, 0),
-        rot=(0, 0, 0),
-        adj_rot=(0, 0, 0),
-        nail_path=None,
+            self,
+            config,
+            task_type,
+            object_path,
+            scale=1.0,
+            offset=(0, 0, 0),
+            rot=(0, 0, 0),
+            adj_rot=(0, 0, 0),
+            nail_path=None,
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot, adj_rot, nail_path)
@@ -116,17 +116,14 @@ class DemoSimEnv(SimEnv):
         self.objects.pop("replaying_text")
         return success
 
-    def reset(self, task_type=None):
+    def reset(self, go_home=False):
         """
         Reset the simulation.
-        :param task_type: Optionally provided type of task to perform.
         """
-        super(DemoSimEnv, self).reset()
+        super(DemoSimEnv, self).reset(go_home=go_home)
         self.gripper_open = False
         self.recording = False
         self.recorded_data = []
-        if task_type is not None:
-            self.task = task_type
         self.load_object(self.task, *self.object_info)
         self._create_debug_dot()
 
@@ -154,11 +151,11 @@ class DemoSimEnv(SimEnv):
         return data
 
     def load_state(self, state):
-        self.reset()
         with open(state) as f:
             data = json.load(f)
-        self.config.SEED = data["seed"]
-        p.resetBasePositionAndOrientation(self.objects["object"], *data["object"])
+        self.config.SEED = int(data["seed"])
+        self.task = data["task"]
+        self.reset(go_home=False)
         p.resetBasePositionAndOrientation(self.objects["arm"], *data["arm"])
         positions, velocities = [], []
         for i, j in enumerate(data["joints"]):
@@ -168,15 +165,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(positions, velocities)
         self.pause()
 
-        self.task = data["task"]
-        self.object_initial_pos_and_rot = (
-            np.array(p.getBasePositionAndOrientation(self.objects["object"])[0]),
-            # TODO add the rotation from DB to make sure the axes are correct
-            np.array(p.getBasePositionAndOrientation(self.objects["object"])[1]),
-        )
-
     def store_state(self, base_object=None, target_object=None):
-        # store a JSON file in BASE_DIR/transfers which allows for loading the env and quick replay
         data = {
             "object": p.getBasePositionAndOrientation(self.objects["object"]),
             "arm": p.getBasePositionAndOrientation(self.objects["arm"]),
@@ -276,7 +265,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-        self, joint_positions, joint_velocities=None
+            self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -488,8 +477,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _determine_hammering_success(self):
@@ -509,7 +498,7 @@ class DemoSimEnv(SimEnv):
 
         for point in contact_points:
             if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
-                point[7]
+                    point[7]
             ):
                 return True
 
@@ -534,7 +523,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-        ]  # the distance to the object (approximately)
+            ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
