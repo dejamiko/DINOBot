@@ -14,15 +14,15 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-            self,
-            config,
-            task_type,
-            object_path,
-            scale=1.0,
-            offset=(0, 0, 0),
-            rot=(0, 0, 0),
-            adj_rot=(0, 0, 0),
-            nail_path=None,
+        self,
+        config,
+        task_type,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
+        adj_rot=(0, 0, 0),
+        nail_path=None,
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot, adj_rot, nail_path)
@@ -116,7 +116,7 @@ class DemoSimEnv(SimEnv):
         self.objects.pop("replaying_text")
         return success
 
-    def reset(self, go_home=False):
+    def reset(self, go_home=True):
         """
         Reset the simulation.
         """
@@ -265,7 +265,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-            self, joint_positions, joint_velocities=None
+        self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -477,8 +477,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _determine_hammering_success(self):
@@ -498,7 +498,7 @@ class DemoSimEnv(SimEnv):
 
         for point in contact_points:
             if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
-                    point[7]
+                point[7]
             ):
                 return True
 
@@ -523,7 +523,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-            ]  # the distance to the object (approximately)
+        ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -636,10 +636,10 @@ if __name__ == "__main__":
     # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    obj_name = "YcbHammer"
-    object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    # i = 157
-    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    # obj_name = "YcbHammer"
+    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
+    i = 81
+    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
         config,
@@ -649,6 +649,7 @@ if __name__ == "__main__":
         rot=(0, 0, 2 * np.pi / 4),
         adj_rot=(0, 0, 0),
         nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
+        scale=1.2,
     )
 
     # rotation which simplifies the demonstration

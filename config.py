@@ -9,8 +9,8 @@ class Config:
     ERR_THRESHOLD = 0.07
     IMAGE_DIR = BASE_DIR + "images/"
     # using the ssh tunnel from home ssh -L 8080:linnet.doc.ic.ac.uk:8000 md1823@shell5.doc.ic.ac.uk
-    # BASE_URL = "http://localhost:8080/"
-    BASE_URL = "http://linnet.doc.ic.ac.uk:8000/"  # otherwise
+    BASE_URL = "http://localhost:8080/"
+    # BASE_URL = "http://linnet.doc.ic.ac.uk:8000/"  # otherwise
     RECOMPUTE_EVERY = 100
     USE_FAST_CORRESPONDENCES = False
     DRAW_CORRESPONDENCES = False

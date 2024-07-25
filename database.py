@@ -402,6 +402,7 @@ scales = {
         "024": 1.2,
         "052": 1.2,
         "078": 1.2,
+        "081": 1.2,
         "157": 1.2,
     },
 }
@@ -419,8 +420,8 @@ rotations = {
     Task.PUSHING.value: {},
     Task.HAMMERING.value: {
         "hammer": (0, 0, 2 * np.pi / 4),
-        "000": (0, 0, 3 * np.pi / 2),
-        "007": (0, 0, 1 * np.pi / 2),
+        "000": (0, 0, 6 * np.pi / 4),
+        "007": (0, 0, 2 * np.pi / 4),
         "011": (0, 0, 6 * np.pi / 4),
         "016": (0, 0, 2 * np.pi / 4),
         "020": (0, 0, 6 * np.pi / 4),
@@ -490,7 +491,10 @@ def populate_transfers(db):
             num = int(num) / 10.0
             num2 = db.get_success_rate(base, target, Task.GRASPING.value)
             if num != num2:
-                print(f"{base}->{target}, {num} and {num2}")
+                print(f"{base}->{target}, {num} and {num2}, taking the lower")
+                if num < num2:
+                    print("Switching for a lower value")
+                    db.add_transfer(base, target, Task.GRASPING.value, num)
             else:
                 print("The same")
 

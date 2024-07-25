@@ -72,7 +72,7 @@ def run_cross_experiment(task):
             all_tries = []
             success_count = 0
             for s in range(
-                    find_first(base, target, config, num_tries, task), num_tries
+                find_first(base, target, config, num_tries, task), num_tries
             ):
                 config.SEED = s
                 success, tries = run_dino_once(config, db, base, target, task)
@@ -117,7 +117,7 @@ def ingest_transfers(task):
             continue
         state = state[:-5]
         num = int(state.split("_")[-1])
-        state = state[:len(state) - 4]
+        state = state[: len(state) - 4]
         earliest_occurrence = len(state)
         latest_occurrence = -1
         base = ""
@@ -143,9 +143,10 @@ def ingest_transfers(task):
             print(
                 f"Completed {i + 1}/{len(files)}, taking {time.time() - start_time} seconds"
             )
+    print(results[prev])
 
 
 if __name__ == "__main__":
-    # run_cross_experiment(Task.PUSHING.value)
+    run_cross_experiment(Task.HAMMERING.value)
     # run_self_experiment(Task.HAMMERING.value)
-    ingest_transfers(Task.PUSHING.value)
+    # ingest_transfers(Task.PUSHING.value)
