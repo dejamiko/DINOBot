@@ -7,8 +7,6 @@ from demo_sim_env import DemoSimEnv
 from dinobot import run_dino_once
 from task_types import Task
 
-from pybullet_object_models import ycb_objects
-
 
 def find_first(base, target, config, num_tries, task):
     i = 0
@@ -74,7 +72,7 @@ def run_cross_experiment(task):
             all_tries = []
             success_count = 0
             for s in range(
-                find_first(base, target, config, num_tries, task), num_tries
+                    find_first(base, target, config, num_tries, task), num_tries
             ):
                 config.SEED = s
                 success, tries = run_dino_once(config, db, base, target, task)
@@ -118,7 +116,8 @@ def ingest_transfers(task):
         if not state.endswith(".json"):
             continue
         state = state[:-5]
-        num = state.split("_")[-1]
+        num = int(state.split("_")[-1])
+        state = state[:len(state) - 4]
         earliest_occurrence = len(state)
         latest_occurrence = -1
         base = ""
@@ -130,7 +129,6 @@ def ingest_transfers(task):
             if state.find(n) != -1 and state.find(n) > latest_occurrence:
                 latest_occurrence = state.find(n)
                 target = n
-        num = int(num)
         success = replay_transfer(config, db, base, target, num, task)
         if (base, target) not in results:
             results[(base, target)] = 0
