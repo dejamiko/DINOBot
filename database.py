@@ -102,7 +102,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         res = self.con.execute(
@@ -115,7 +115,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         (
@@ -168,10 +168,10 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-            object_id_1 is not None
+                object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-            object_id_2 is not None
+                object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         success_rate = self.con.execute(
@@ -208,13 +208,13 @@ class DB:
                 )
 
     def add_demo(
-        self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
+            self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
     ):
         self._check_path(demo_path, ".json")
 
         object_id = self._get_object_id_by_name(object_name)
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         prev = self.get_demo(object_name, task)
@@ -282,14 +282,14 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-            object_id_1 is not None
+                object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-            object_id_2 is not None
+                object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         assert (
-            0 <= success_rate <= 1
+                0 <= success_rate <= 1
         ), f"success rate should be between 0 and 1, got {success_rate}"
 
         prev = self.get_success_rate(object_name_1, object_name_2, task)
@@ -474,31 +474,31 @@ def pascal_to_snake_case(name):
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-def populate_transfers(db):
+def populate_transfers(db, task):
     reg = re.compile(
         r"For transfer ([a-z0-9_]*)->([a-z0-9_]*): (\d*)/10 success rate with -?\d*.?\d* steps on average"
     )
-    with open("_generated/grasping_cross_experiment") as f:
+    with open(f"_generated/{task}_cross_experiment") as f:
         lines = f.readlines()
         for l in lines:
             m = reg.match(l)
             base, target, num = m.groups()
-            db.add_transfer(base, target, Task.GRASPING.value, int(num) / 10.0)
+            db.add_transfer(base, target, task, int(num) / 10.0)
 
-    with open("_generated/grasping_cross_experiment_replays") as f:
+    with open(f"_generated/{task}_cross_experiment_replays") as f:
         lines = f.readlines()
         for l in lines:
             m = reg.match(l)
             base, target, num = m.groups()
             num = int(num) / 10.0
-            num2 = db.get_success_rate(base, target, Task.GRASPING.value)
+            num2 = db.get_success_rate(base, target, task)
             if num != num2:
-                print(f"{base}->{target}, {num} and {num2}, taking the lower")
-                if num < num2:
-                    print("Switching for a lower value")
-                    db.add_transfer(base, target, Task.GRASPING.value, num)
-            else:
-                print("The same")
+                if num2 is None:
+                    db.add_transfer(base, target, task, num)
+                elif base == target:
+                    db.add_transfer(base, target, task, max(num, num2))
+                else:
+                    db.add_transfer(base, target, task, min(num, num2))
 
 
 def create_and_populate_db(config):
@@ -530,8 +530,40 @@ def create_and_populate_db(config):
                 rotations[task].get(object_name, None),
                 adj_rotations[task].get(object_name, None),
             )
-    populate_transfers(db)
+    for task in Task:
+        populate_transfers(db, task.value)
     return db
+
+
+def get_num_of_successes(name, names, task, db):
+    successes = 0
+    for n in names:
+        if n == name:
+            continue
+        s_r = db.get_success_rate(name, n, task)
+        if s_r >= 0.7:
+            successes += 1
+    return successes
+
+
+def get_self_success(n, task, db):
+    return db.get_success_rate(n, n, task) >= 0.7
+
+
+def get_viable_objects(db):
+    viable_names = {}
+    for task in Task:
+        names = db.get_all_object_names_for_task(task.value)
+        names_to_remove = set()
+        for n in names:
+            if get_num_of_successes(n, names, task.value, db) >= 10:
+                print(n, task.value, get_num_of_successes(n, names, task.value, db))
+                names_to_remove.add(n)
+            if not get_self_success(n, task.value, db):
+                print(f"No self success for {n}, {task.value}")
+                names_to_remove.add(n)
+        viable_names[task.value] = sorted(list(set(names) - names_to_remove))
+    return viable_names
 
 
 if __name__ == "__main__":
@@ -543,3 +575,7 @@ if __name__ == "__main__":
     print(db.get_demo("banana", Task.GRASPING.value))
     print(db.get_demo("banana", Task.PUSHING.value))
     print(db.get_demo("hammer", Task.HAMMERING.value))
+    v_o = get_viable_objects(db)
+
+    for task in Task:
+        print(task.value, len(v_o[task.value]))

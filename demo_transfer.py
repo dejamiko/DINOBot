@@ -64,7 +64,7 @@ def run_cross_experiment(task):
 
     names = db.get_all_object_names_for_task(task)
 
-    print(f"Running cross transfer experiment for task {task}")
+    print(f"Running cross transfer experiment for task {task} for objects {names}")
 
     num_tries = 10
     for base in names:
