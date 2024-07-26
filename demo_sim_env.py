@@ -638,7 +638,7 @@ if __name__ == "__main__":
 
     # obj_name = "YcbHammer"
     # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    i = 126
+    i = 147
     object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
@@ -646,10 +646,10 @@ if __name__ == "__main__":
         Task.HAMMERING.value,
         object_path,
         offset=(0, 0, 0),
-        rot=(0, 0, 6 * np.pi / 4),
-        adj_rot=(0, 0, np.pi),
+        rot=(0, 0, 2 * np.pi / 4),
+        adj_rot=(0, 0, 0),
         nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
-        scale=1.2,
+        scale=1.1,
     )
 
     # rotation which simplifies the demonstration
