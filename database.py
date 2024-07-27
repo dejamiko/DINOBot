@@ -1,12 +1,16 @@
+import json
 import os
 import re
+import shutil
 import sqlite3
 
+import cv2
 import numpy as np
 import pybullet_data
 from pybullet_object_models import ycb_objects
 
 from config import Config
+from demo_sim_env import DemoSimEnv
 from task_types import Task
 
 
@@ -102,7 +106,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         res = self.con.execute(
@@ -115,7 +119,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         (
@@ -168,10 +172,10 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-                object_id_1 is not None
+            object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-                object_id_2 is not None
+            object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         success_rate = self.con.execute(
@@ -208,13 +212,13 @@ class DB:
                 )
 
     def add_demo(
-            self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
+        self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
     ):
         self._check_path(demo_path, ".json")
 
         object_id = self._get_object_id_by_name(object_name)
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         prev = self.get_demo(object_name, task)
@@ -282,14 +286,14 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-                object_id_1 is not None
+            object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-                object_id_2 is not None
+            object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         assert (
-                0 <= success_rate <= 1
+            0 <= success_rate <= 1
         ), f"success rate should be between 0 and 1, got {success_rate}"
 
         prev = self.get_success_rate(object_name_1, object_name_2, task)
@@ -319,6 +323,54 @@ class DB:
     def get_nail_object(self):
         # TODO this is hard-coded and not nice at all
         return self.get_load_info("chips_can", Task.GRASPING.value)[0]
+
+    def export_data_for_learning(self):
+        export_path = os.path.join(self.config.BASE_DIR, "export")
+        self._clear_directory(export_path)
+        # create a json file with the structure (obj_name, task): path_to_images
+        object_data = {}
+        viable_objects = get_viable_objects(db)
+        obj_task_list = []
+        for t in viable_objects.keys():
+            for n in viable_objects[t]:
+                demo_path = self.get_demo(n, t)
+                image_path = self._save_images(demo_path, export_path, n, t)
+                object_data[f"{n}-{t}"] = image_path
+                obj_task_list.append((n, t))
+
+        with open(os.path.join(export_path, "objects.json"), "w") as f:
+            json.dump(object_data, f)
+
+        transfers = {}
+        for t in viable_objects.keys():
+            for n in viable_objects[t]:
+                for n2 in viable_objects[t]:
+                    transfers[f"{n}-{n2}-{t}"] = self.get_success_rate(n, n2, t)
+        with open(os.path.join(export_path, "transfers.json"), "w") as f:
+            json.dump(transfers, f)
+
+    @staticmethod
+    def _clear_directory(export_path):
+        if os.path.isdir(export_path) and len(os.listdir(export_path)) != 0:
+            for filename in os.listdir(export_path):
+                file_path = os.path.join(export_path, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print("Failed to delete %s. Reason: %s" % (file_path, e))
+
+    @staticmethod
+    def _save_images(demo_path, export_path, obj_name, task):
+        new_dir_path = os.path.join(export_path, f"{obj_name}_{task}/")
+        os.makedirs(new_dir_path)
+        data = DemoSimEnv.load_demonstration(demo_path)
+        images = data["images"]
+        for i, im in enumerate(images):
+            cv2.imwrite(os.path.join(new_dir_path, f"image_{i}.png"), im)
+        return new_dir_path
 
 
 ycb_names = [
@@ -575,7 +627,5 @@ if __name__ == "__main__":
     print(db.get_demo("banana", Task.GRASPING.value))
     print(db.get_demo("banana", Task.PUSHING.value))
     print(db.get_demo("hammer", Task.HAMMERING.value))
-    v_o = get_viable_objects(db)
 
-    for task in Task:
-        print(task.value, len(v_o[task.value]))
+    db.export_data_for_learning()
