@@ -10,7 +10,6 @@ import pybullet_data
 from pybullet_object_models import ycb_objects
 
 from config import Config
-from demo_sim_env import DemoSimEnv
 from task_types import Task
 
 
@@ -106,7 +105,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         res = self.con.execute(
@@ -119,7 +118,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         (
@@ -172,10 +171,10 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-            object_id_1 is not None
+                object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-            object_id_2 is not None
+                object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         success_rate = self.con.execute(
@@ -212,13 +211,13 @@ class DB:
                 )
 
     def add_demo(
-        self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
+            self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
     ):
         self._check_path(demo_path, ".json")
 
         object_id = self._get_object_id_by_name(object_name)
         assert (
-            object_id is not None
+                object_id is not None
         ), f"There is no object {object_name} in the database"
 
         prev = self.get_demo(object_name, task)
@@ -286,14 +285,14 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-            object_id_1 is not None
+                object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-            object_id_2 is not None
+                object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         assert (
-            0 <= success_rate <= 1
+                0 <= success_rate <= 1
         ), f"success rate should be between 0 and 1, got {success_rate}"
 
         prev = self.get_success_rate(object_name_1, object_name_2, task)
@@ -334,8 +333,11 @@ class DB:
         for t in viable_objects.keys():
             for n in viable_objects[t]:
                 demo_path = self.get_demo(n, t)
-                image_path = self._save_images(demo_path, export_path, n, t)
-                object_data[f"{n}-{t}"] = image_path
+                image_path, image_embeddings = self._save_images_and_get_embeddings(demo_path, export_path, n, t)
+                object_data[f"{n}-{t}"] = {
+                    "image_path": image_path,
+                    "image_embeddings": image_embeddings
+                }
                 obj_task_list.append((n, t))
 
         with open(os.path.join(export_path, "objects.json"), "w") as f:
@@ -362,15 +364,21 @@ class DB:
                 except Exception as e:
                     print("Failed to delete %s. Reason: %s" % (file_path, e))
 
-    @staticmethod
-    def _save_images(demo_path, export_path, obj_name, task):
+    def _save_images_and_get_embeddings(self, demo_path, export_path, obj_name, task):
+        from demo_sim_env import DemoSimEnv
+        from DINOserver.client import get_embeddings
+
         new_dir_path = os.path.join(export_path, f"{obj_name}_{task}/")
         os.makedirs(new_dir_path)
         data = DemoSimEnv.load_demonstration(demo_path)
         images = data["images"]
+        image_embeddings = []
         for i, im in enumerate(images):
-            cv2.imwrite(os.path.join(new_dir_path, f"image_{i}.png"), im)
-        return new_dir_path
+            img_path = os.path.join(new_dir_path, f"image_{i}.png")
+            cv2.imwrite(img_path, im)
+            image_embeddings.append(get_embeddings(img_path, self.config.BASE_URL))
+
+        return new_dir_path, image_embeddings
 
 
 ycb_names = [
@@ -427,6 +435,28 @@ urdf_paths = {
     "126": "random_urdfs/126/126.urdf",
     "147": "random_urdfs/147/147.urdf",
     "157": "random_urdfs/157/157.urdf",
+    "001": "random_urdfs/001/001.urdf",
+    "002": "random_urdfs/002/002.urdf",
+    "003": "random_urdfs/003/003.urdf",
+    "005": "random_urdfs/005/005.urdf",
+    "006": "random_urdfs/006/006.urdf",
+    "008": "random_urdfs/008/008.urdf",
+    "009": "random_urdfs/009/009.urdf",
+    "010": "random_urdfs/010/010.urdf",
+    "012": "random_urdfs/012/012.urdf",
+    "015": "random_urdfs/015/015.urdf",
+    "018": "random_urdfs/018/018.urdf",
+    "019": "random_urdfs/019/019.urdf",
+    "021": "random_urdfs/021/021.urdf",
+    "023": "random_urdfs/023/023.urdf",
+    "025": "random_urdfs/025/025.urdf",
+    "026": "random_urdfs/026/026.urdf",
+    "027": "random_urdfs/027/027.urdf",
+    "029": "random_urdfs/029/029.urdf",
+    "030": "random_urdfs/030/030.urdf",
+    "034": "random_urdfs/034/034.urdf",
+    "035": "random_urdfs/035/035.urdf",
+    "037": "random_urdfs/037/037.urdf",
 }
 
 scales = {
@@ -459,12 +489,18 @@ scales = {
         "147": 1.1,
         "157": 1.2,
     },
+    Task.GRASPING_SIMP.value: {}
 }
 
 positions = {
     Task.GRASPING.value: {},
     Task.PUSHING.value: {},
     Task.HAMMERING.value: {},
+    Task.GRASPING_SIMP.value: {
+        "006": (0, 0.02, 0),
+        "015": (0, -0.05, 0),
+        "024": (0, -0.04, 0),
+    }
 }
 
 rotations = {
@@ -494,6 +530,38 @@ rotations = {
         "147": (0, 0, 2 * np.pi / 4),
         "157": (0, 0, 6 * np.pi / 4),
     },
+    Task.GRASPING_SIMP.value: {
+        "000": (0, 0, 3 * np.pi / 2),
+        "001": (0, 0, np.pi / 2),
+        "002": (0, 0, np.pi / 2),
+        "003": (0, np.pi / 2, np.pi / 2),
+        "005": (0, 0, np.pi / 2),
+        "006": (0, 0, np.pi / 2),
+        "007": (0, 0, np.pi / 2),
+        "008": (0, 0, np.pi / 2),
+        "009": (0, 0, np.pi / 2),
+        "010": (0, 0, np.pi / 2),
+        "011": (0, 0, 3 * np.pi / 2),
+        "012": (0, 0, 3 * np.pi / 2),
+        "014": (0, 0, 3 * np.pi / 2),
+        "015": (0, 0, np.pi / 2),
+        "016": (0, 0, np.pi / 2),
+        "018": (0, 0, np.pi / 2),
+        "019": (0, 0, 3 * np.pi / 2),
+        "020": (0, 0, 3 * np.pi / 2),
+        "021": (0, np.pi / 2, np.pi / 2),
+        "023": (0, np.pi / 2, np.pi / 2),
+        "024": (0, np.pi / 2, 3 * np.pi / 2),
+        "025": (0, np.pi / 2, 3 * np.pi / 2),
+        "026": (0, np.pi / 2, np.pi / 2),
+        "027": (0, 0, np.pi / 2),
+        "029": (0, 0, 3 * np.pi / 2),
+        "030": (0, 0, np.pi / 2),
+        "033": (0, 0, np.pi / 2),
+        "034": (0, 0, np.pi / 2),
+        "035": (0, 0, np.pi / 2),
+        "037": (np.pi / 2, 0, np.pi / 2),
+    }
 }
 
 adj_rotations = {
@@ -515,6 +583,7 @@ adj_rotations = {
         "126": (0, 0, np.pi),
         "157": (0, 0, np.pi),
     },
+    Task.GRASPING_SIMP.value: {}
 }
 
 
@@ -582,8 +651,8 @@ def create_and_populate_db(config):
                 rotations[task].get(object_name, None),
                 adj_rotations[task].get(object_name, None),
             )
-    for task in Task:
-        populate_transfers(db, task.value)
+    # for task in Task:
+    #     populate_transfers(db, task.value)
     return db
 
 
@@ -624,8 +693,10 @@ if __name__ == "__main__":
     print(db.get_all_object_names_for_task(Task.GRASPING.value))
     print(db.get_all_object_names_for_task(Task.PUSHING.value))
     print(db.get_all_object_names_for_task(Task.HAMMERING.value))
+    print(db.get_all_object_names_for_task(Task.GRASPING_SIMP.value))
     print(db.get_demo("banana", Task.GRASPING.value))
     print(db.get_demo("banana", Task.PUSHING.value))
     print(db.get_demo("hammer", Task.HAMMERING.value))
+    print(db.get_demo("018", Task.GRASPING_SIMP.value))
 
-    db.export_data_for_learning()
+    # db.export_data_for_learning()

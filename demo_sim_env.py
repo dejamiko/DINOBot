@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+import cv2
 import numpy as np
 import pybullet as p
 from pybullet_object_models import ycb_objects
@@ -14,15 +15,15 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-        self,
-        config,
-        task_type,
-        object_path,
-        scale=1.0,
-        offset=(0, 0, 0),
-        rot=(0, 0, 0),
-        adj_rot=(0, 0, 0),
-        nail_path=None,
+            self,
+            config,
+            task_type,
+            object_path,
+            scale=1.0,
+            offset=(0, 0, 0),
+            rot=(0, 0, 0),
+            adj_rot=(0, 0, 0),
+            nail_path=None,
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot, adj_rot, nail_path)
@@ -58,6 +59,7 @@ class DemoSimEnv(SimEnv):
             ord("t"): lambda: self._reset_from_keyboard(),  # reset
             ord("."): lambda: self._store_state_keyboard(),  # store the current state
             ord(","): lambda: self._load_last_state(),  # load the last state
+            ord("/"): lambda: self._capture_images(),  # capture demo images
         }
 
         self.load_object(task_type, *self.object_info)
@@ -265,7 +267,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-        self, joint_positions, joint_velocities=None
+            self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -477,8 +479,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _determine_hammering_success(self):
@@ -498,14 +500,14 @@ class DemoSimEnv(SimEnv):
 
         for point in contact_points:
             if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
-                point[7]
+                    point[7]
             ):
                 return True
 
         return False
 
     def _evaluate_success(self):
-        if self.task == Task.GRASPING.value:
+        if self.task == Task.GRASPING.value or self.task == Task.GRASPING_SIMP.value:
             return self._determine_grasp_success()
         elif self.task == Task.PUSHING.value:
             return self._determine_push_success()
@@ -520,10 +522,12 @@ class DemoSimEnv(SimEnv):
         # move to 4 different viewpoints by moving an angle on a sphere in the positive and negative x and y axes
         pos, rot = p.getLinkState(self.objects["arm"], 11)[:2]
         x, y, z = pos
+        if self.task == Task.PUSHING.value:
+            x += 0.1
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-        ]  # the distance to the object (approximately)
+            ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -532,8 +536,7 @@ class DemoSimEnv(SimEnv):
         new_rot = p.getQuaternionFromEuler(
             (roll, pitch - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw)
         )
-        self._move_with_debug_dot(new_pos, new_rot)
-        img, depth = self.get_rgbd_image()
+        img, depth = self.get_rgbd_image_with_pos_rot(new_pos, new_rot)
         images.append(img)
         depth_buffers.append(depth)
 
@@ -542,8 +545,7 @@ class DemoSimEnv(SimEnv):
         new_rot = p.getQuaternionFromEuler(
             (roll, pitch + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, yaw)
         )
-        self._move_with_debug_dot(new_pos, new_rot)
-        img, depth = self.get_rgbd_image()
+        img, depth = self.get_rgbd_image_with_pos_rot(new_pos, new_rot)
         images.append(img)
         depth_buffers.append(depth)
 
@@ -552,8 +554,7 @@ class DemoSimEnv(SimEnv):
         new_rot = p.getQuaternionFromEuler(
             (roll + self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw)
         )
-        self._move_with_debug_dot(new_pos, new_rot)
-        img, depth = self.get_rgbd_image()
+        img, depth = self.get_rgbd_image_with_pos_rot(new_pos, new_rot)
         images.append(img)
         depth_buffers.append(depth)
 
@@ -562,15 +563,44 @@ class DemoSimEnv(SimEnv):
         new_rot = p.getQuaternionFromEuler(
             (roll - self.config.DEMO_ADDITIONAL_IMAGE_ANGLE, pitch, yaw)
         )
-        self._move_with_debug_dot(new_pos, new_rot)
-        img, depth = self.get_rgbd_image()
+        img, depth = self.get_rgbd_image_with_pos_rot(new_pos, new_rot)
         images.append(img)
         depth_buffers.append(depth)
 
-        # return to the initial position
-        self._move_with_debug_dot(pos, rot)
-
         return images, depth_buffers
+
+    def get_rgbd_image_with_pos_rot(self, pos, rot):
+        width = self.config.LOAD_SIZE
+        height = self.config.LOAD_SIZE
+
+        fov = self.config.CAMERA_FOV
+        aspect = width / height
+        near = self.config.CAMERA_NEAR_PLANE
+        far = self.config.CAMERA_FAR_PLANE
+        projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
+
+        additional_rot = np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler((0, 0, -np.pi / 2)))).reshape(3,
+                                                                                                                   -1)
+
+        camera_position, rot_matrix = pos, np.array(p.getMatrixFromQuaternion(rot)).reshape(3, -1)
+        rot_matrix = rot_matrix @ additional_rot
+        init_camera_vector = self.config.CAMERA_INIT_VECTOR
+        init_up_vector = self.config.CAMERA_INIT_UP
+        camera_vector = rot_matrix.dot(init_camera_vector)
+        up_vector = rot_matrix.dot(init_up_vector)
+        view_matrix = p.computeViewMatrix(
+            camera_position, camera_position + 0.1 * camera_vector, up_vector
+        )
+
+        _, _, rgb_image, depth_buffer, _ = p.getCameraImage(
+            width, height, view_matrix, projection_matrix
+        )
+        rgb_image = np.array(rgb_image).reshape(height, width, -1).astype(np.uint8)
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGRA2RGB)
+
+        depth_buffer = np.array(depth_buffer).reshape(height, width).astype(np.float32)
+
+        return rgb_image, depth_buffer
 
     def _store_state_keyboard(self):
         if self.recently_triggered > 0:
@@ -621,6 +651,16 @@ class DemoSimEnv(SimEnv):
         )
         self.dot_is_red = True
 
+    def _capture_images(self):
+        if self.recently_triggered > 0:
+            return
+        self.recently_triggered = 10
+        images, _ = self._take_demo_images()
+        for ind, im in enumerate(images):
+            cv2.imwrite(f"image_{ind}.png", im)
+
+        print("IMAGES TAKEN")
+
 
 def record_demo_with_keyboard():
     while True:
@@ -633,26 +673,42 @@ if __name__ == "__main__":
     config = Config()
     config.RANDOM_OBJECT_ROTATION = False
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
-    # db = create_and_populate_db(config)
     config.VERBOSITY = 1
 
-    # obj_name = "YcbHammer"
-    # object_path = os.path.join(ycb_objects.getDataPath(), obj_name, "model.urdf")
-    i = 147
+    # db = DB(config)
+    # target_object = "tomato_soup_can"
+    # task = Task.GRASPING.value
+    #
+    # load_path, scale, pos, rot, rot_adj = *db.get_load_info(target_object, task),
+    #
+    # # helper adjustments
+    # if task == Task.PUSHING.value:
+    #     pos = (pos[0] + 0.1, pos[1], pos[2])
+    #     rot_adj = (rot_adj[0], rot_adj[1], rot_adj[2] - 2.3)
+    #
+    # if task == Task.GRASPING.value:
+    #     rot = (rot[0], rot[1], rot[2])
+    #
+    # sim = DemoSimEnv(
+    #     config,
+    #     task,
+    #     load_path, scale, pos, rot, rot_adj,
+    #     db.get_nail_object()
+    # )
+
+    i = 37
     object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
 
     sim = DemoSimEnv(
         config,
-        Task.HAMMERING.value,
+        Task.GRASPING_SIMP.value,
         object_path,
         offset=(0, 0, 0),
-        rot=(0, 0, 2 * np.pi / 4),
+        rot=(np.pi / 2, 0, np.pi / 2),
         adj_rot=(0, 0, 0),
         nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
-        scale=1.1,
+        scale=1,
     )
-
-    # rotation which simplifies the demonstration
 
     record_demo_with_keyboard()
 

@@ -11,3 +11,4 @@ class Task(AutoName):
     GRASPING = auto()
     PUSHING = auto()
     HAMMERING = auto()
+    GRASPING_SIMP = auto()

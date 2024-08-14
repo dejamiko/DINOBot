@@ -108,9 +108,11 @@ class SimEnv:
         :param scale: The scale to be used for the object model
         :param offset: The offset to the initial object position
         :param rot: The rotation applied to the initial object rotation
+        :param adj_rot: Additional adjustment rotation used for some tasks
+        :param nail_path: The path to the nail object if used
         """
         # load the object on the table somewhere random (within a certain range)
-        if task_type == Task.GRASPING.value:
+        if task_type == Task.GRASPING.value or task_type == Task.GRASPING_SIMP.value:
             self._load_object_on_the_table(object_path, offset, rot, scale)
         elif task_type == Task.PUSHING.value:
             self._load_object_on_the_table_save_pose(

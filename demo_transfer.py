@@ -148,5 +148,5 @@ def ingest_transfers(task):
 
 if __name__ == "__main__":
     # run_cross_experiment(Task.HAMMERING.value)
-    # run_self_experiment(Task.HAMMERING.value)
-    ingest_transfers(Task.HAMMERING.value)
+    run_self_experiment(Task.GRASPING_SIMP.value)
+    # ingest_transfers(Task.HAMMERING.value)
