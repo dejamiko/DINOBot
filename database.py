@@ -436,10 +436,8 @@ urdf_paths = {
     "147": "random_urdfs/147/147.urdf",
     "157": "random_urdfs/157/157.urdf",
     "001": "random_urdfs/001/001.urdf",
-    "002": "random_urdfs/002/002.urdf",
     "003": "random_urdfs/003/003.urdf",
     "005": "random_urdfs/005/005.urdf",
-    "006": "random_urdfs/006/006.urdf",
     "008": "random_urdfs/008/008.urdf",
     "009": "random_urdfs/009/009.urdf",
     "010": "random_urdfs/010/010.urdf",
@@ -497,7 +495,6 @@ positions = {
     Task.PUSHING.value: {},
     Task.HAMMERING.value: {},
     Task.GRASPING_SIMP.value: {
-        "006": (0, 0.02, 0),
         "015": (0, -0.05, 0),
         "024": (0, -0.04, 0),
     }
@@ -533,10 +530,8 @@ rotations = {
     Task.GRASPING_SIMP.value: {
         "000": (0, 0, 3 * np.pi / 2),
         "001": (0, 0, np.pi / 2),
-        "002": (0, 0, np.pi / 2),
         "003": (0, np.pi / 2, np.pi / 2),
         "005": (0, 0, np.pi / 2),
-        "006": (0, 0, np.pi / 2),
         "007": (0, 0, np.pi / 2),
         "008": (0, 0, np.pi / 2),
         "009": (0, 0, np.pi / 2),
