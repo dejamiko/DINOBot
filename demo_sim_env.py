@@ -9,6 +9,7 @@ from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
+from database import DB
 from sim_env import SimEnv
 from task_types import Task
 
@@ -675,40 +676,40 @@ if __name__ == "__main__":
     config.RANDOM_OBJECT_POSITION_FOLLOWING = True
     config.VERBOSITY = 1
 
-    # db = DB(config)
-    # target_object = "tomato_soup_can"
-    # task = Task.GRASPING.value
-    #
-    # load_path, scale, pos, rot, rot_adj = *db.get_load_info(target_object, task),
-    #
-    # # helper adjustments
-    # if task == Task.PUSHING.value:
-    #     pos = (pos[0] + 0.1, pos[1], pos[2])
-    #     rot_adj = (rot_adj[0], rot_adj[1], rot_adj[2] - 2.3)
-    #
-    # if task == Task.GRASPING.value:
-    #     rot = (rot[0], rot[1], rot[2])
-    #
-    # sim = DemoSimEnv(
-    #     config,
-    #     task,
-    #     load_path, scale, pos, rot, rot_adj,
-    #     db.get_nail_object()
-    # )
+    db = DB(config)
+    target_object = "037"
+    task = Task.GRASPING_SIMP.value
 
-    i = 37
-    object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    load_path, scale, pos, rot, rot_adj = *db.get_load_info(target_object, task),
+
+    # helper adjustments
+    if task == Task.PUSHING.value:
+        pos = (pos[0] + 0.1, pos[1], pos[2])
+        rot_adj = (rot_adj[0], rot_adj[1], rot_adj[2] - 2.3)
+
+    if task == Task.GRASPING.value:
+        rot = (rot[0], rot[1], rot[2])
 
     sim = DemoSimEnv(
         config,
-        Task.GRASPING_SIMP.value,
-        object_path,
-        offset=(0, 0, 0),
-        rot=(np.pi / 2, 0, np.pi / 2),
-        adj_rot=(0, 0, 0),
-        nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
-        scale=1,
+        task,
+        load_path, scale, pos, rot, rot_adj,
+        db.get_nail_object()
     )
+
+    # i = 37
+    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
+    #
+    # sim = DemoSimEnv(
+    #     config,
+    #     Task.GRASPING_SIMP.value,
+    #     object_path,
+    #     offset=(0, 0, 0),
+    #     rot=(np.pi / 2, 0, np.pi / 2),
+    #     adj_rot=(0, 0, 0),
+    #     nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
+    #     scale=1,
+    # )
 
     record_demo_with_keyboard()
 
