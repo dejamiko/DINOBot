@@ -601,6 +601,8 @@ def populate_transfers(db, task):
             base, target, num = m.groups()
             db.add_transfer(base, target, task, int(num) / 10.0)
 
+    if not os.path.exists(f"_generated/{task}_cross_experiment_replays"):
+        return
     with open(f"_generated/{task}_cross_experiment_replays") as f:
         lines = f.readlines()
         for l in lines:
@@ -646,8 +648,8 @@ def create_and_populate_db(config):
                 rotations[task].get(object_name, None),
                 adj_rotations[task].get(object_name, None),
             )
-    # for task in Task:
-    #     populate_transfers(db, task.value)
+    for task in Task:
+        populate_transfers(db, task.value)
     return db
 
 
