@@ -149,4 +149,5 @@ def ingest_transfers(task):
 if __name__ == "__main__":
     # run_cross_experiment(Task.GRASPING_SIMP.value)
     # run_self_experiment(Task.GRASPING_SIMP.value)
-    ingest_transfers(Task.GRASPING_SIMP.value)
+    # ingest_transfers(Task.GRASPING_SIMP.value)
+    pass

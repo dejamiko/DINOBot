@@ -333,11 +333,8 @@ class DB:
         for t in viable_objects.keys():
             for n in viable_objects[t]:
                 demo_path = self.get_demo(n, t)
-                image_path, image_embeddings = self._save_images_and_get_embeddings(demo_path, export_path, n, t)
-                object_data[f"{n}-{t}"] = {
-                    "image_path": image_path,
-                    "image_embeddings": image_embeddings
-                }
+                image_path = self._save_images(demo_path, export_path, n, t)
+                object_data[f"{n}-{t}"] = image_path
                 obj_task_list.append((n, t))
 
         with open(os.path.join(export_path, "objects.json"), "w") as f:
@@ -364,21 +361,19 @@ class DB:
                 except Exception as e:
                     print("Failed to delete %s. Reason: %s" % (file_path, e))
 
-    def _save_images_and_get_embeddings(self, demo_path, export_path, obj_name, task):
+    @staticmethod
+    def _save_images(demo_path, export_path, obj_name, task):
         from demo_sim_env import DemoSimEnv
-        from DINOserver.client import get_embeddings
 
         new_dir_path = os.path.join(export_path, f"{obj_name}_{task}/")
         os.makedirs(new_dir_path)
         data = DemoSimEnv.load_demonstration(demo_path)
         images = data["images"]
-        image_embeddings = []
         for i, im in enumerate(images):
             img_path = os.path.join(new_dir_path, f"image_{i}.png")
             cv2.imwrite(img_path, im)
-            image_embeddings.append(get_embeddings(img_path, self.config.BASE_URL))
 
-        return new_dir_path, image_embeddings
+        return new_dir_path
 
 
 ycb_names = [
@@ -599,7 +594,10 @@ def populate_transfers(db, task):
         for l in lines:
             m = reg.match(l)
             base, target, num = m.groups()
-            db.add_transfer(base, target, task, int(num) / 10.0)
+            try:
+                db.add_transfer(base, target, task, int(num) / 10.0)
+            except AssertionError:
+                continue
 
     if not os.path.exists(f"_generated/{task}_cross_experiment_replays"):
         return
@@ -609,7 +607,10 @@ def populate_transfers(db, task):
             m = reg.match(l)
             base, target, num = m.groups()
             num = int(num) / 10.0
-            num2 = db.get_success_rate(base, target, task)
+            try:
+                num2 = db.get_success_rate(base, target, task)
+            except AssertionError:
+                continue
             if num != num2:
                 if num2 is None:
                     db.add_transfer(base, target, task, num)
@@ -626,6 +627,8 @@ def create_and_populate_db(config):
     base_dir = "demonstrations/"
     sub_dirs = [x[0] for x in os.walk(base_dir)]
     for directory in sub_dirs:
+        if directory.endswith("_removed"):
+            continue
         for f in os.listdir(directory):
             if not f.endswith(".json"):
                 continue
@@ -672,9 +675,14 @@ def get_viable_objects(db):
     viable_names = {}
     for task in Task:
         names = db.get_all_object_names_for_task(task.value)
+
+        if task == Task.GRASPING_SIMP:
+            viable_names[task.value] = sorted(names)
+            continue
+
         names_to_remove = set()
         for n in names:
-            if get_num_of_successes(n, names, task.value, db) >= 10:
+            if get_num_of_successes(n, names, task.value, db) >= len(db.get_all_object_names_for_task(task.value)) / 2:
                 print(n, task.value, get_num_of_successes(n, names, task.value, db))
                 names_to_remove.add(n)
             if not get_self_success(n, task.value, db):
@@ -696,4 +704,4 @@ if __name__ == "__main__":
     print(db.get_demo("hammer", Task.HAMMERING.value))
     print(db.get_demo("018", Task.GRASPING_SIMP.value))
 
-    # db.export_data_for_learning()
+    db.export_data_for_learning()
