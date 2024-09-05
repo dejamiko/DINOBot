@@ -13,8 +13,6 @@ def connector_fixture():
     image1 = "tests/_test_assets/image1.png"
     image2 = "tests/_test_assets/image2.png"
 
-    # TODO mock the server somehow and assert the results are the same
-
     yield config, image1, image2
 
 

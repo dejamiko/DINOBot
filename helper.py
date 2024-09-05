@@ -7,9 +7,6 @@ from task_types import Task
 
 
 def update_old_jsons():
-    # load the state to json
-    # add task: "grasping"
-    # save to json as previously
     base_dir = "_generated/transfers/grasping_old/"
     for state in os.listdir(base_dir):
         if not state.endswith(".json"):

@@ -3,19 +3,24 @@ import time
 import wandb
 
 from config import Config
+from database import DB
 from dinobot import run_dino_once
+from task_types import Task
 
 
 def run_fast_and_slow(config):
     config.VERBOSITY = 1
     config.USE_GUI = False
     config.USE_FAST_CORRESPONDENCES = True
-    demo_path = "demonstrations/demonstration_001.json"
+    db = DB(config)
+
     num_of_runs = 10
     successes_1 = 0
     for i in range(num_of_runs):
         config.SEED = i
-        success = run_dino_once(config, demo_path)
+        success, _ = run_dino_once(
+            config, db, "banana", "banana", Task.GRASPING.value
+        )
         if success:
             successes_1 += 1
 
@@ -25,7 +30,9 @@ def run_fast_and_slow(config):
     successes_2 = 0
     for i in range(num_of_runs):
         config.SEED = i
-        success = run_dino_once(config, demo_path)
+        success, _ = run_dino_once(
+            config, db, "banana", "banana", Task.GRASPING.value
+        )
         if success:
             successes_2 += 1
 

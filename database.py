@@ -320,7 +320,6 @@ class DB:
         return res[0] if res is not None else res
 
     def get_nail_object(self):
-        # TODO this is hard-coded and not nice at all
         return self.get_load_info("chips_can", Task.GRASPING.value)[0]
 
     def export_data_for_learning(self):

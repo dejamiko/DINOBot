@@ -14,6 +14,9 @@ from task_types import Task
 
 
 class DemoSimEnv(SimEnv):
+    """
+    The class responsible for recording demonstrations for the arm environment, using keyboard control.
+    """
     def __init__(
         self,
         config,
@@ -134,7 +137,7 @@ class DemoSimEnv(SimEnv):
         """
         Load a demonstration from a file.
         :param filename: The filename of the demonstration.
-        :return: The demonstration as a dictionary {"images": images, "depth_bn": depth buffers,
+        :return: The demonstration as a dictionary {"images": images, "depth_buffers": depth buffers,
         "demo_positions": the offset positions}
         """
         with open(filename, "r") as file:
@@ -153,6 +156,10 @@ class DemoSimEnv(SimEnv):
         return data
 
     def load_state(self, state):
+        """
+        Load the given state.
+        :param state: The given state as a path.
+        """
         with open(state) as f:
             data = json.load(f)
         self.config.SEED = int(data["seed"])
@@ -168,6 +175,11 @@ class DemoSimEnv(SimEnv):
         self.pause()
 
     def store_state(self, base_object=None, target_object=None):
+        """
+        Store the given simulation state.
+        :param base_object: The name of the base object.
+        :param target_object: The name of the target object.
+        """
         data = {
             "object": p.getBasePositionAndOrientation(self.objects["object"]),
             "arm": p.getBasePositionAndOrientation(self.objects["arm"]),
@@ -269,6 +281,11 @@ class DemoSimEnv(SimEnv):
     def _set_joint_positions_and_velocities(
         self, joint_positions, joint_velocities=None
     ):
+        """
+        Set the joint positions and velocities
+        :param joint_positions: The target joint positions
+        :param joint_velocities: The target joint velocities
+        """
         if joint_velocities is not None:
             p.setJointMotorControlArray(
                 self.objects["arm"],
@@ -435,6 +452,9 @@ class DemoSimEnv(SimEnv):
         self.replay_demo(data)
 
     def _reset_from_keyboard(self):
+        """
+        Reset the simulation using a keypress
+        """
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
@@ -484,6 +504,11 @@ class DemoSimEnv(SimEnv):
         )
 
     def _determine_hammering_success(self):
+        """
+        Determine the success for the hammering task by looking for a top-down collision with
+        the nail object.
+        :return: True if success was found, false otherwise.
+        """
         # see if the nail was struck
         contact_points = p.getContactPoints(
             self.objects["object"], self.objects["nail"]
@@ -507,6 +532,10 @@ class DemoSimEnv(SimEnv):
         return False
 
     def _evaluate_success(self):
+        """
+        Evaluate the success for the current task
+        :return: True if the current task was successfully performed, False otherwise
+        """
         if self.task == Task.GRASPING.value or self.task == Task.GRASPING_SIMP.value:
             return self._determine_grasp_success()
         elif self.task == Task.PUSHING.value:
@@ -515,6 +544,9 @@ class DemoSimEnv(SimEnv):
             return self._determine_hammering_success()
 
     def _take_demo_images(self):
+        """
+        Take the demo images from multiple viewpoints.
+        """
         images, depth_buffers = [], []
         img, depth = self.get_rgbd_image()
         images.append(img)
@@ -570,6 +602,12 @@ class DemoSimEnv(SimEnv):
         return images, depth_buffers
 
     def get_rgbd_image_with_pos_rot(self, pos, rot):
+        """
+        Get an RGB-D image with a given position and rotation.
+        :param pos: The position of the camera
+        :param rot: The rotation of the camera.
+        :return: The RGB-D image
+        """
         width = self.config.LOAD_SIZE
         height = self.config.LOAD_SIZE
 
@@ -606,12 +644,18 @@ class DemoSimEnv(SimEnv):
         return rgb_image, depth_buffer
 
     def _store_state_keyboard(self):
+        """
+        Store the state with a keypress
+        """
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
         self.store_state()
 
     def _load_last_state(self):
+        """
+        Load the last recorded state
+        """
         directory = os.path.join(self.config.BASE_DIR, "transfers/")
         latest_time = 0
         latest_path = None
@@ -624,6 +668,9 @@ class DemoSimEnv(SimEnv):
         self.load_state(latest_path)
 
     def _update_debug_dot(self):
+        """
+        Update the debug dot
+        """
         suc = self._evaluate_success()
         if suc and self.dot_is_red:
             self.dot_is_red = False
@@ -641,6 +688,9 @@ class DemoSimEnv(SimEnv):
             )
 
     def _create_debug_dot(self):
+        """
+        Create the debug dot.
+        """
         dot = p.createVisualShape(
             p.GEOM_SPHERE,
             radius=0.02,
@@ -655,6 +705,9 @@ class DemoSimEnv(SimEnv):
         self.dot_is_red = True
 
     def _capture_images(self):
+        """
+        Capture images with a keypress
+        """
         if self.recently_triggered > 0:
             return
         self.recently_triggered = 10
@@ -666,6 +719,9 @@ class DemoSimEnv(SimEnv):
 
 
 def record_demo_with_keyboard():
+    """
+    Record a demonstration with keyboard control
+    """
     while True:
         sim.control_arm_with_keyboard()
         p.stepSimulation()
@@ -679,38 +735,13 @@ if __name__ == "__main__":
     config.VERBOSITY = 1
 
     db = DB(config)
-    target_object = "037"
-    task = Task.GRASPING_SIMP.value
+    target_object = "banana"
+    task = Task.GRASPING.value
 
     load_path, scale, pos, rot, rot_adj = (*db.get_load_info(target_object, task),)
-
-    # helper adjustments
-    if task == Task.PUSHING.value:
-        pos = (pos[0] + 0.1, pos[1], pos[2])
-        rot_adj = (rot_adj[0], rot_adj[1], rot_adj[2] - 2.3)
-
-    if task == Task.GRASPING.value:
-        rot = (rot[0], rot[1], rot[2])
 
     sim = DemoSimEnv(
         config, task, load_path, scale, pos, rot, rot_adj, db.get_nail_object()
     )
 
-    # i = 37
-    # object_path = f"random_urdfs/{str(i).zfill(3)}/{str(i).zfill(3)}.urdf"
-    #
-    # sim = DemoSimEnv(
-    #     config,
-    #     Task.GRASPING_SIMP.value,
-    #     object_path,
-    #     offset=(0, 0, 0),
-    #     rot=(np.pi / 2, 0, np.pi / 2),
-    #     adj_rot=(0, 0, 0),
-    #     nail_path=os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
-    #     scale=1,
-    # )
-
     record_demo_with_keyboard()
-
-    # data = sim.load_demonstration(db.get_demo_for_object("banana"))
-    # sim.replay_demo(data["demo_positions"])

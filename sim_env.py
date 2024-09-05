@@ -11,6 +11,11 @@ from task_types import Task
 
 
 def to_euler(angles):
+    """
+    Transform the angles provided into Euler angles in degrees and make them a string.
+    :param angles: The angles as a rotation matrix or quaternions
+    :return: String containing the Euler angles
+    """
     if len(angles) == 3:
         angles = Rotation.from_matrix(angles).as_quat(canonical=True)
     angles = p.getEulerFromQuaternion(angles)
@@ -23,7 +28,7 @@ def to_euler(angles):
 class SimEnv:
     """
     A class that sets up the simulation environment and provides functions to interact with it. It contains a table, an
-    arm, and some objects that can be placed on the table.
+    arm, and an object that can be placed on the table.
     """
 
     def __init__(self, config):
@@ -298,6 +303,10 @@ class SimEnv:
                 self.objects.pop("points_debug_3d")
 
     def get_current_joint_positions(self):
+        """
+        Get the current joint positions
+        :return: the current joint positions
+        """
         return [
             x[0]
             for x in p.getJointStates(
@@ -307,6 +316,9 @@ class SimEnv:
 
     @staticmethod
     def pause():
+        """
+        Let the simulation run for a bit for stuff to settle down
+        """
         for _ in range(1000):
             p.stepSimulation()
 
@@ -379,6 +391,16 @@ class SimEnv:
     def _load_object_and_move_arm(
         self, angle, object_path, offset, pos_x, pos_y, rot, scale
     ):
+        """
+        Load the object with given data and move the arm.
+        :param angle: The additional angle by which the object is rotated in the yaw axis
+        :param object_path: The path the object is loaded from
+        :param offset: The offset from the base at which the object is loaded
+        :param pos_x: The base x position
+        :param pos_y: The base y position
+        :param rot: The base rotation
+        :param scale: The scale of the object
+        """
         x_base, y_base, z_base = self.config.OBJECT_X_Y_Z_BASE
         self.objects["object"] = p.loadURDF(
             object_path,
@@ -397,6 +419,10 @@ class SimEnv:
         self._move_to_target_position_and_rotation(pos)
 
     def _get_position_and_rotation(self):
+        """
+        Get the position and rotation from the config and random perturbations
+        :return:
+        """
         x_base, y_base, _ = self.config.OBJECT_X_Y_Z_BASE
         pos_x = (
             np.random.uniform(-0.05, 0.05) + x_base
@@ -416,6 +442,15 @@ class SimEnv:
     def _load_object_with_nail(
         self, object_path, offset, rot, scale, adj_rot, nail_path
     ):
+        """
+        Load the object with the additional nail object
+        :param object_path: The path the object is loaded from
+        :param offset: The offset from the base at which the object is loaded
+        :param rot: The base rotation
+        :param scale: The scale of the object
+        :param adj_rot: The additional adjustment rotation
+        :param nail_path: The path to the nail object
+        """
         angle, pos_x, pos_y = self._get_position_and_rotation()
         self._load_object_and_move_arm(
             angle, object_path, offset, pos_x, pos_y, rot, scale

@@ -7,8 +7,11 @@ from config import Config
 from sim_env import SimEnv
 
 
-# TODO this doesn't record anything, just moves as requested with the debug parameters
 class DemoSim(SimEnv):
+    """
+    The debug-parameter controlled demonstration recording framework.
+    Due to issues with the debug parameters, this only allows for movement, no recording.
+    """
     def __init__(self, task_name):
         super(DemoSim, self).__init__(task_name)
         self.debug_parameters = self.create_debug_parameters()

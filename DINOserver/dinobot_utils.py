@@ -1,3 +1,5 @@
+# Code adapted from snippets given by Normal Di Palo
+
 import torch
 
 from .correspondences import find_correspondences

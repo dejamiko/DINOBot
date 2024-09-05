@@ -333,9 +333,9 @@ if __name__ == "__main__":
     config.RUN_LOCALLY = False
     config.USE_FAST_CORRESPONDENCES = True
     config.DRAW_CORRESPONDENCES = True
-    config.SEED = 4
+    config.SEED = 0
     config.BASE_URL = "http://localhost:8080/"
     db = DB(config)
     success, tries = run_dino_once(
-        config, db, "power_drill", "power_drill", Task.GRASPING.value
+        config, db, "banana", "banana", Task.GRASPING.value
     )

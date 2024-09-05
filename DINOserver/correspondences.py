@@ -1,3 +1,5 @@
+# Code adapted from snippets given by Normal Di Palo
+
 import argparse
 from pathlib import Path
 from typing import List, Tuple

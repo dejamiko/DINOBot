@@ -5,6 +5,7 @@ from dinobot import find_transformation
 
 
 def test_find_transformation():
+    # Adapted from https://github.com/nghiaho12/rigid_transform_3D
     config = Config()
     # Test with random data
     # Random rotation and translation
@@ -42,8 +43,3 @@ def test_find_transformation():
     rmse = np.sqrt(err / n)
 
     assert rmse < 1e-5
-
-
-def test_find_transformation_lower_DOF():
-    # TODO add this test
-    pass
