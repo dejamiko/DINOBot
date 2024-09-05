@@ -5,7 +5,6 @@ from config import Config
 from database import DB
 from demo_sim_env import DemoSimEnv
 from dinobot import run_dino_once
-from task_types import Task
 
 
 def find_first(base, target, config, num_tries, task):

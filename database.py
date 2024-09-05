@@ -105,7 +105,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         res = self.con.execute(
@@ -118,7 +118,7 @@ class DB:
         object_id = self._get_object_id_by_name(object_name)
 
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         (
@@ -171,10 +171,10 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-                object_id_1 is not None
+            object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-                object_id_2 is not None
+            object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         success_rate = self.con.execute(
@@ -211,13 +211,13 @@ class DB:
                 )
 
     def add_demo(
-            self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
+        self, object_name, task, demo_path, scale=None, pos=None, rot=None, rot_adj=None
     ):
         self._check_path(demo_path, ".json")
 
         object_id = self._get_object_id_by_name(object_name)
         assert (
-                object_id is not None
+            object_id is not None
         ), f"There is no object {object_name} in the database"
 
         prev = self.get_demo(object_name, task)
@@ -285,14 +285,14 @@ class DB:
         object_id_2 = self._get_object_id_by_name(object_name_2)
 
         assert (
-                object_id_1 is not None
+            object_id_1 is not None
         ), f"There is no object {object_name_1} in the database"
         assert (
-                object_id_2 is not None
+            object_id_2 is not None
         ), f"There is no object {object_name_2} in the database"
 
         assert (
-                0 <= success_rate <= 1
+            0 <= success_rate <= 1
         ), f"success rate should be between 0 and 1, got {success_rate}"
 
         prev = self.get_success_rate(object_name_1, object_name_2, task)
@@ -482,7 +482,7 @@ scales = {
         "147": 1.1,
         "157": 1.2,
     },
-    Task.GRASPING_SIMP.value: {}
+    Task.GRASPING_SIMP.value: {},
 }
 
 positions = {
@@ -492,7 +492,7 @@ positions = {
     Task.GRASPING_SIMP.value: {
         "015": (0, -0.05, 0),
         "024": (0, -0.04, 0),
-    }
+    },
 }
 
 rotations = {
@@ -551,7 +551,7 @@ rotations = {
         "034": (0, 0, np.pi / 2),
         "035": (0, 0, np.pi / 2),
         "037": (np.pi / 2, 0, np.pi / 2),
-    }
+    },
 }
 
 adj_rotations = {
@@ -573,7 +573,7 @@ adj_rotations = {
         "126": (0, 0, np.pi),
         "157": (0, 0, np.pi),
     },
-    Task.GRASPING_SIMP.value: {}
+    Task.GRASPING_SIMP.value: {},
 }
 
 
@@ -682,7 +682,10 @@ def get_viable_objects(db):
 
         names_to_remove = set()
         for n in names:
-            if get_num_of_successes(n, names, task.value, db) >= len(db.get_all_object_names_for_task(task.value)) / 2:
+            if (
+                get_num_of_successes(n, names, task.value, db)
+                >= len(db.get_all_object_names_for_task(task.value)) / 2
+            ):
                 print(n, task.value, get_num_of_successes(n, names, task.value, db))
                 names_to_remove.add(n)
             if not get_self_success(n, task.value, db):

@@ -5,7 +5,6 @@ import time
 import cv2
 import numpy as np
 import pybullet as p
-from pybullet_object_models import ycb_objects
 from scipy.spatial.transform import Rotation
 
 from config import Config
@@ -16,15 +15,15 @@ from task_types import Task
 
 class DemoSimEnv(SimEnv):
     def __init__(
-            self,
-            config,
-            task_type,
-            object_path,
-            scale=1.0,
-            offset=(0, 0, 0),
-            rot=(0, 0, 0),
-            adj_rot=(0, 0, 0),
-            nail_path=None,
+        self,
+        config,
+        task_type,
+        object_path,
+        scale=1.0,
+        offset=(0, 0, 0),
+        rot=(0, 0, 0),
+        adj_rot=(0, 0, 0),
+        nail_path=None,
     ):
         super(DemoSimEnv, self).__init__(config)
         self.object_info = (object_path, scale, offset, rot, adj_rot, nail_path)
@@ -268,7 +267,7 @@ class DemoSimEnv(SimEnv):
         self._set_joint_positions_and_velocities(joint_positions)
 
     def _set_joint_positions_and_velocities(
-            self, joint_positions, joint_velocities=None
+        self, joint_positions, joint_velocities=None
     ):
         if joint_velocities is not None:
             p.setJointMotorControlArray(
@@ -480,8 +479,8 @@ class DemoSimEnv(SimEnv):
             angle_from_negative_x = np.pi / 2
 
         return total_dist > self.config.PUSH_SUCCESS_DIST and (
-                angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
-                or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
+            angle_from_positive_x <= self.config.PUSH_SUCCESS_ANGLE
+            or angle_from_negative_x <= self.config.PUSH_SUCCESS_ANGLE
         )
 
     def _determine_hammering_success(self):
@@ -501,7 +500,7 @@ class DemoSimEnv(SimEnv):
 
         for point in contact_points:
             if point[9] > self.config.HAMMERING_SUCCESS_FORCE and is_pointing_downwards(
-                    point[7]
+                point[7]
             ):
                 return True
 
@@ -528,7 +527,7 @@ class DemoSimEnv(SimEnv):
         roll, pitch, yaw = p.getEulerFromQuaternion(rot)
         r = depth[len(depth) // 2][
             len(depth) // 2
-            ]  # the distance to the object (approximately)
+        ]  # the distance to the object (approximately)
         new_z = z - r * (1.0 - np.cos(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE))
         offset = r * np.sin(self.config.DEMO_ADDITIONAL_IMAGE_ANGLE)
 
@@ -580,10 +579,13 @@ class DemoSimEnv(SimEnv):
         far = self.config.CAMERA_FAR_PLANE
         projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
-        additional_rot = np.array(p.getMatrixFromQuaternion(p.getQuaternionFromEuler((0, 0, -np.pi / 2)))).reshape(3,
-                                                                                                                   -1)
+        additional_rot = np.array(
+            p.getMatrixFromQuaternion(p.getQuaternionFromEuler((0, 0, -np.pi / 2)))
+        ).reshape(3, -1)
 
-        camera_position, rot_matrix = pos, np.array(p.getMatrixFromQuaternion(rot)).reshape(3, -1)
+        camera_position, rot_matrix = pos, np.array(
+            p.getMatrixFromQuaternion(rot)
+        ).reshape(3, -1)
         rot_matrix = rot_matrix @ additional_rot
         init_camera_vector = self.config.CAMERA_INIT_VECTOR
         init_up_vector = self.config.CAMERA_INIT_UP
@@ -680,7 +682,7 @@ if __name__ == "__main__":
     target_object = "037"
     task = Task.GRASPING_SIMP.value
 
-    load_path, scale, pos, rot, rot_adj = *db.get_load_info(target_object, task),
+    load_path, scale, pos, rot, rot_adj = (*db.get_load_info(target_object, task),)
 
     # helper adjustments
     if task == Task.PUSHING.value:
@@ -691,10 +693,7 @@ if __name__ == "__main__":
         rot = (rot[0], rot[1], rot[2])
 
     sim = DemoSimEnv(
-        config,
-        task,
-        load_path, scale, pos, rot, rot_adj,
-        db.get_nail_object()
+        config, task, load_path, scale, pos, rot, rot_adj, db.get_nail_object()
     )
 
     # i = 37
