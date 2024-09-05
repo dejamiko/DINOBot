@@ -10,6 +10,8 @@ attempts, and additional training data.
 
 More information about the implemented methods, including a user guide, can be found in the dissertation report. 
 
+This repository was private for the duration of the project and made public on the 5th of September 2024.
+
 ### Structure
 The repository contains the following:
  - `_generated` - The generated artefacts, including the transfer attempts and success rates
